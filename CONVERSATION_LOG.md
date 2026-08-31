@@ -37,3 +37,8 @@
    - **Canvas AI Image Enhancer (`src/lib/aiImageEnhancer.ts`)**: Built a prompt-aware client-side image transformation engine that processes user photos according to prompt intent (Twilight dusk lighting, warm interior window glows, HDR sky vibrance, clean interior brightness).
    - **Guaranteed Displayable Data URLs**: Resolved the issue where unresolvable Supabase storage URLs rendered a black box on the "SESUDAH (AI)" side of `BeforeAfterSlider.tsx`.
    - **Clean Production Build**: Verified with `npm run build` (`built in 2.31s`) and `npm run test` (340/340 passed). Committed and pushed to GitHub commit `0b73035`.
+
+7. **Base URL Permanent Persistence Fix**:
+   - **Eliminated Default Typo Seed**: Fixed `DEFAULT_AI_CONFIG` and `mockDb.seedDefaults()` in `src/lib/mockSupabase.ts` to permanently default to `https://api.koboillm.com/v1` (with 1 'i').
+   - **Auto-Normalizing Load & Save**: Added `normalizeUrl` logic in `loadConfig` and `handleSaveConfig` so any old cached state with `koboiillm.com` (2 'i's) is automatically normalized to `https://api.koboillm.com/v1`.
+   - **Verified Build & Tests**: 100% test pass rate (340/340) and clean production build (`built in 2.32s`). Committed and pushed to GitHub commit `1798c91`.
