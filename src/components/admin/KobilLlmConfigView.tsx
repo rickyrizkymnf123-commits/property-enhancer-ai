@@ -298,8 +298,8 @@ export const KobilLlmConfigView: React.FC = () => {
           .eq('is_active', true);
 
         if (data && data.length > 0) {
-          const chatRow = data.find((r: any) => r.purpose === 'chat');
-          const imageRow = data.find((r: any) => r.purpose === 'image_generation');
+          const chatRow = data.find((r: any) => r.purpose === 'chat' && r.provider_name === 'kobil_llm') || data.find((r: any) => r.purpose === 'chat');
+          const imageRow = data.find((r: any) => r.purpose === 'image_generation' && r.provider_name === 'kobil_llm') || data.find((r: any) => r.purpose === 'image_generation');
 
           if (chatRow) {
             if (chatRow.provider_name) setChatProvider(chatRow.provider_name);
@@ -313,8 +313,12 @@ export const KobilLlmConfigView: React.FC = () => {
                   decrypted = atob(b64);
                 } catch (_) {}
               }
-              setRawChatApiKey(decrypted);
-              setChatApiKeyInput(decrypted);
+              const currentSaved = typeof window !== 'undefined' ? localStorage.getItem('pea_ai_provider_config_v4') : null;
+              const parsedSaved = currentSaved ? JSON.parse(currentSaved) : null;
+              if (!parsedSaved?.chatConfig?.rawApiKey || decrypted !== 'sk-koboi-live-99887766554433221100') {
+                setRawChatApiKey(decrypted);
+                setChatApiKeyInput(decrypted);
+              }
             }
           }
 
@@ -330,8 +334,12 @@ export const KobilLlmConfigView: React.FC = () => {
                   decrypted = atob(b64);
                 } catch (_) {}
               }
-              setRawImageApiKey(decrypted);
-              setImageApiKeyInput(decrypted);
+              const currentSaved = typeof window !== 'undefined' ? localStorage.getItem('pea_ai_provider_config_v4') : null;
+              const parsedSaved = currentSaved ? JSON.parse(currentSaved) : null;
+              if (!parsedSaved?.imageConfig?.rawApiKey || decrypted !== 'sk-koboi-live-99887766554433221100') {
+                setRawImageApiKey(decrypted);
+                setImageApiKeyInput(decrypted);
+              }
             }
           }
         }

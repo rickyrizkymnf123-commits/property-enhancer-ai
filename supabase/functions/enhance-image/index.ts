@@ -59,6 +59,7 @@ export async function handleEnhanceImage(req: Request): Promise<Response> {
       .from("api_provider_settings")
       .select("base_url, model_name, api_key_encrypted")
       .eq("purpose", "image_generation")
+      .eq("provider_name", "kobil_llm")
       .eq("is_active", true)
       .order("updated_at", { ascending: false })
       .limit(1)

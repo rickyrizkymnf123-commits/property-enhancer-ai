@@ -269,10 +269,10 @@ export class MockDatabase {
       provider_name: 'lovable',
       is_default: true,
       is_enabled: true,
-      is_active: true,
+      is_active: false,
       base_url: 'https://api.koboillm.com/v1',
       model_name: 'google/gemini-2.5-flash-image',
-      config: { gateway_url: 'https://gateway.lovable.ai/v1', timeout_seconds: 30 },
+      config: { gateway_url: 'https://api.koboillm.com/v1', timeout_seconds: 30 },
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     } as any);
@@ -1305,9 +1305,9 @@ export class MockFunctionsClient {
     mockDb.images.set(imageId, { ...newImage });
     realtimeMultiplexer.emit('images', 'UPDATE', { ...newImage });
 
-    // 3. Resolve Provider Config for purpose='image_generation'
+    // 3. Resolve Provider Config for purpose='image_generation' (strictly kobil_llm)
     let imageProviderSetting = Array.from(mockDb.api_provider_settings.values()).find(
-      (p: any) => p.purpose === 'image_generation' && (p.is_active || p.is_default)
+      (p: any) => p.purpose === 'image_generation' && p.provider_name === 'kobil_llm' && (p.is_active || p.is_default)
     ) || Array.from(mockDb.api_provider_settings.values()).find(
       (p: any) => p.provider_name === 'kobil_llm'
     );

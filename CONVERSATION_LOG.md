@@ -123,3 +123,17 @@
     - Verified clean Bearer token propagation, prefix sanitization, and prevention of masked placeholder key overwrites.
     - Verified all 352 automated tests in Vitest pass (100% pass rate) and `npm run build` builds cleanly in 2.42s with zero errors.
     - Documented comprehensive report in `.agents/reviewer_2/report.md` and 5-component handoff in `.agents/reviewer_2/handoff.md` with explicit verdict **APPROVE**.
+
+20. **Adversarial Stress Testing & Edge-Case Verification of Milestone 7 (Challenger 2)**:
+    - Performed empirical stress testing across 4 hostile attack vectors: multi-cycle state oscillations (`200 OK` -> `401 Unauthorized` -> `200 Retry` -> `500 Server Timeout`), partial configuration edits with masked key preservation, Bearer token sanitization, raw server error propagation (401, 403, 404, 500), and slider coordinate boundary clamping.
+    - Authored and executed dedicated adversarial test suite `tests/unit/adversarial_milestone7.test.tsx` (17 stress tests).
+    - Verified 100% test pass rate across 369 tests in 12 test suites and clean production build (`built in 2.50s`).
+    - Documented exhaustive findings in `.agents/challenger_2/report.md` and 5-component handoff report in `.agents/challenger_2/handoff.md` with explicit verdict **APPROVE**.
+
+21. **Forensic Integrity Audit of Milestone 7 (Auditor 1)**:
+    - Conducted forensic integrity audit across Milestone 7 codebase, edge functions, and unit/E2E suites.
+    - Verified authentic error propagation, strict result view suppression on HTTP 401/400/500, Bearer token construction, and zero hardcoded test fixtures in production components.
+    - Identified 3 test failures during full regression test suite execution (366 passed, 3 failed) caused by multiple `is_default: true` rows in `src/lib/mockSupabase.ts` and test fixture DB key desync in `admin_audit.test.tsx` test 8.3.
+    - Documented full root-cause analysis and remediation steps in `.agents/auditor_1/report.md` and `.agents/auditor_1/handoff.md` with explicit verdict **INTEGRITY VIOLATION**.
+
+
