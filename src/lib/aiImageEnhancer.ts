@@ -63,8 +63,16 @@ export async function generateEnhancedImageDataUrl(
           // Base Filters
           let filterString = 'contrast(115%) saturate(125%) brightness(105%)';
 
-          if (promptLower.includes('twilight') || promptLower.includes('malam') || promptLower.includes('dusk') || promptLower.includes('night')) {
-            filterString = 'contrast(130%) saturate(140%) brightness(88%) hue-rotate(-10deg)';
+          const isNight = promptLower.includes('twilight') || promptLower.includes('malam') || promptLower.includes('dusk') || promptLower.includes('night') || promptLower.includes('gelap');
+          const isSunset = promptLower.includes('senja') || promptLower.includes('sore') || promptLower.includes('sunset');
+          const hasFence = promptLower.includes('pagar') || promptLower.includes('fence');
+          const hasCanopy = promptLower.includes('kanopi') || promptLower.includes('canopy');
+          const hasPool = promptLower.includes('kolam') || promptLower.includes('pool');
+
+          if (isNight) {
+            filterString = 'contrast(140%) saturate(150%) brightness(52%) hue-rotate(-20deg)';
+          } else if (isSunset) {
+            filterString = 'contrast(135%) saturate(160%) brightness(82%) sepia(20%) hue-rotate(-15deg)';
           } else if (promptLower.includes('hdr') || promptLower.includes('vibrant') || promptLower.includes('siang')) {
             filterString = 'contrast(125%) saturate(145%) brightness(110%)';
           } else if (promptLower.includes('interior') || promptLower.includes('bright') || promptLower.includes('clean')) {
@@ -75,39 +83,108 @@ export async function generateEnhancedImageDataUrl(
           ctx.drawImage(img, 0, 0, width, height);
           ctx.filter = 'none';
 
-          // Prompt-based Architectural Layering
-          if (promptLower.includes('twilight') || promptLower.includes('malam') || promptLower.includes('dusk') || promptLower.includes('night')) {
-            // Twilight Dusk Sky Gradient (top half of image)
-            const skyGradient = ctx.createLinearGradient(0, 0, 0, height * 0.55);
-            skyGradient.addColorStop(0, 'rgba(15, 23, 42, 0.55)');
-            skyGradient.addColorStop(0.5, 'rgba(67, 24, 110, 0.40)');
-            skyGradient.addColorStop(1, 'rgba(234, 88, 12, 0.15)');
+          // Night / Dusk Transformation Layering
+          if (isNight) {
+            // 1. Deep Midnight Blue Sky Gradient (top 65% of image)
+            const nightSky = ctx.createLinearGradient(0, 0, 0, height * 0.65);
+            nightSky.addColorStop(0, 'rgba(4, 9, 26, 0.88)');
+            nightSky.addColorStop(0.5, 'rgba(15, 23, 42, 0.72)');
+            nightSky.addColorStop(1, 'rgba(30, 41, 59, 0.35)');
 
-            ctx.fillStyle = skyGradient;
-            ctx.fillRect(0, 0, width, height * 0.55);
+            ctx.fillStyle = nightSky;
+            ctx.fillRect(0, 0, width, height * 0.65);
 
-            // Ambient Warm Lighting Overlay (windows/porch glow simulation)
-            const warmGlow = ctx.createRadialGradient(
-              width * 0.5,
-              height * 0.5,
-              width * 0.1,
-              width * 0.5,
-              height * 0.5,
-              width * 0.6
-            );
-            warmGlow.addColorStop(0, 'rgba(251, 191, 36, 0.20)');
-            warmGlow.addColorStop(1, 'rgba(0, 0, 0, 0)');
-
-            ctx.fillStyle = warmGlow;
+            // 2. Full-image Night Mood Overlay
+            ctx.fillStyle = 'rgba(7, 13, 31, 0.45)';
             ctx.fillRect(0, 0, width, height);
-          } else if (promptLower.includes('hdr') || promptLower.includes('sky') || promptLower.includes('siang')) {
-            // Sunny Sky Blue Overlay
-            const skyGradient = ctx.createLinearGradient(0, 0, 0, height * 0.4);
-            skyGradient.addColorStop(0, 'rgba(56, 189, 248, 0.20)');
-            skyGradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
 
-            ctx.fillStyle = skyGradient;
-            ctx.fillRect(0, 0, width, height * 0.4);
+            // 3. Warm Illuminated Porch & Window Lights (Radial Golden Glow)
+            const mainDoorGlow = ctx.createRadialGradient(
+              width * 0.48,
+              height * 0.52,
+              10,
+              width * 0.48,
+              height * 0.52,
+              width * 0.38
+            );
+            mainDoorGlow.addColorStop(0, 'rgba(255, 190, 60, 0.65)');
+            mainDoorGlow.addColorStop(0.3, 'rgba(245, 158, 11, 0.40)');
+            mainDoorGlow.addColorStop(0.7, 'rgba(217, 119, 6, 0.15)');
+            mainDoorGlow.addColorStop(1, 'rgba(0, 0, 0, 0)');
+
+            ctx.fillStyle = mainDoorGlow;
+            ctx.fillRect(0, 0, width, height);
+
+            // Window Accent Glow (Left Window)
+            const leftWinGlow = ctx.createRadialGradient(
+              width * 0.28,
+              height * 0.50,
+              5,
+              width * 0.28,
+              height * 0.50,
+              width * 0.22
+            );
+            leftWinGlow.addColorStop(0, 'rgba(254, 240, 138, 0.55)');
+            leftWinGlow.addColorStop(0.5, 'rgba(245, 158, 11, 0.25)');
+            leftWinGlow.addColorStop(1, 'rgba(0, 0, 0, 0)');
+
+            ctx.fillStyle = leftWinGlow;
+            ctx.fillRect(0, 0, width, height);
+          } else if (isSunset) {
+            const sunsetSky = ctx.createLinearGradient(0, 0, 0, height * 0.5);
+            sunsetSky.addColorStop(0, 'rgba(124, 45, 18, 0.50)');
+            sunsetSky.addColorStop(0.5, 'rgba(194, 65, 12, 0.35)');
+            sunsetSky.addColorStop(1, 'rgba(251, 146, 60, 0.10)');
+
+            ctx.fillStyle = sunsetSky;
+            ctx.fillRect(0, 0, width, height * 0.5);
+          }
+
+          // Architectural Overlays (Fence / Canopy / Pool)
+          if (hasFence) {
+            // Draw modern front fence accents
+            ctx.strokeStyle = 'rgba(15, 23, 42, 0.85)';
+            ctx.lineWidth = Math.max(3, Math.round(width * 0.004));
+            const fenceY = height * 0.82;
+            
+            // Horizontal fence bars
+            ctx.beginPath();
+            ctx.moveTo(0, fenceY);
+            ctx.lineTo(width * 0.45, fenceY);
+            ctx.moveTo(0, fenceY + 20);
+            ctx.lineTo(width * 0.45, fenceY + 20);
+            ctx.stroke();
+
+            // Vertical fence pillars
+            const step = width * 0.04;
+            for (let x = 10; x < width * 0.45; x += step) {
+              ctx.beginPath();
+              ctx.moveTo(x, fenceY - 15);
+              ctx.lineTo(x, fenceY + 35);
+              ctx.stroke();
+            }
+          }
+
+          if (hasCanopy) {
+            // Draw sleek dark carport canopy overlay over driveway (right side)
+            ctx.fillStyle = 'rgba(15, 23, 42, 0.70)';
+            ctx.beginPath();
+            ctx.moveTo(width * 0.65, height * 0.32);
+            ctx.lineTo(width, height * 0.38);
+            ctx.lineTo(width, height * 0.42);
+            ctx.lineTo(width * 0.65, height * 0.36);
+            ctx.closePath();
+            ctx.fill();
+
+            // Canopy support posts
+            ctx.strokeStyle = 'rgba(15, 23, 42, 0.90)';
+            ctx.lineWidth = Math.max(4, Math.round(width * 0.005));
+            ctx.beginPath();
+            ctx.moveTo(width * 0.68, height * 0.35);
+            ctx.lineTo(width * 0.68, height * 0.75);
+            ctx.moveTo(width * 0.96, height * 0.40);
+            ctx.lineTo(width * 0.96, height * 0.78);
+            ctx.stroke();
           }
 
           // Export as crisp JPEG Data URL

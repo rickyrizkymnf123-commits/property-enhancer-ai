@@ -121,6 +121,23 @@ export async function handleEnhanceImage(req: Request): Promise<Response> {
       }
     }
 
+    const pLower = (prompt || "").toLowerCase();
+    let visualDirectives = "";
+    if (pLower.includes("malam") || pLower.includes("night") || pLower.includes("dusk") || pLower.includes("twilight") || pLower.includes("gelap")) {
+      visualDirectives += " [Visual Directive: Transform the lighting to dark night sky with dark navy blue atmosphere, warm illuminated porch lights, glowing windows, and high contrast nighttime property photography.]";
+    }
+    if (pLower.includes("pagar") || pLower.includes("fence")) {
+      visualDirectives += " [Visual Directive: Add a modern perimeter fence in front of the house.]";
+    }
+    if (pLower.includes("kanopi") || pLower.includes("canopy")) {
+      visualDirectives += " [Visual Directive: Add a sleek carport canopy over the driveway.]";
+    }
+    if (pLower.includes("siang") || pLower.includes("bright") || pLower.includes("sun")) {
+      visualDirectives += " [Visual Directive: Transform lighting to bright clear sunny day with blue sky.]";
+    }
+
+    const fullPromptText = `Edit this exact photo. Keep the building structure and camera angle exactly the same. ${prompt}.${visualDirectives}`;
+
     // 2. Panggil Kobil LLM (format OpenAI-compatible chat completions dengan image input)
     const response = await fetch(endpoint, {
       method: "POST",
@@ -136,7 +153,7 @@ export async function handleEnhanceImage(req: Request): Promise<Response> {
             content: [
               {
                 type: "text",
-                text: `Edit this exact photo. Keep the building structure and camera angle exactly the same. ${prompt}. Do not add, remove, or change structural elements unless explicitly asked.`,
+                text: fullPromptText,
               },
               {
                 type: "image_url",
