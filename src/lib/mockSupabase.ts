@@ -1365,10 +1365,32 @@ export class MockFunctionsClient {
     }
 
     // 4. Single-Path Real Kobil LLM Proxy Fetch Execution
-    const inputImageBase64 = body.image_base64 || body.original_url || body.file_path;
+    let inputImageBase64 = body.image_base64 || body.original_url || body.file_path;
     const inputPrompt = body.prompt || body.preset || 'Enhance property photo';
     let enhancedResultUrl: string | null = null;
     let rawApiError: string | null = null;
+
+    if (inputImageBase64 && !inputImageBase64.startsWith('data:image/')) {
+      if (/^[A-Za-z0-9+/=]+$/.test(inputImageBase64.substring(0, 100).replace(/\s/g, ''))) {
+        inputImageBase64 = `data:image/jpeg;base64,${inputImageBase64}`;
+      } else if (inputImageBase64.startsWith('http://') || inputImageBase64.startsWith('https://')) {
+        try {
+          const fetchRes = await fetch(inputImageBase64);
+          if (fetchRes.ok) {
+            const mimeType = fetchRes.headers.get('content-type') || 'image/jpeg';
+            const blob = await fetchRes.blob();
+            if (typeof FileReader !== 'undefined') {
+              inputImageBase64 = await new Promise<string>((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onloadend = () => resolve(reader.result as string);
+                reader.onerror = reject;
+                reader.readAsDataURL(blob);
+              });
+            }
+          }
+        } catch (_) {}
+      }
+    }
 
     if (inputImageBase64 && typeof window !== 'undefined' && !(typeof process !== 'undefined' && process.env?.VITEST)) {
       try {

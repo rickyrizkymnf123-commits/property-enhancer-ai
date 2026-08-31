@@ -96,6 +96,31 @@ export async function handleEnhanceImage(req: Request): Promise<Response> {
     const baseUrl = (config.base_url || "https://api.koboillm.com/v1").trim().replace("koboiillm.com", "koboillm.com").replace(/\/$/, "");
     const endpoint = `${baseUrl}/chat/completions`;
 
+    // Ensure imageBase64 has full data:image/...;base64, Data URL header expected by LiteLLM Proxy
+    let formattedImageBase64 = imageBase64 || "";
+    if (formattedImageBase64 && !formattedImageBase64.startsWith("data:image/")) {
+      if (/^[A-Za-z0-9+/=]+$/.test(formattedImageBase64.substring(0, 100).replace(/\s/g, ""))) {
+        formattedImageBase64 = `data:image/jpeg;base64,${formattedImageBase64}`;
+      } else if (formattedImageBase64.startsWith("http://") || formattedImageBase64.startsWith("https://")) {
+        try {
+          const imgRes = await fetch(formattedImageBase64);
+          if (imgRes.ok) {
+            const mimeType = imgRes.headers.get("content-type") || "image/jpeg";
+            const arrayBuf = await imgRes.arrayBuffer();
+            const bytes = new Uint8Array(arrayBuf);
+            let binary = "";
+            for (let i = 0; i < bytes.byteLength; i++) {
+              binary += String.fromCharCode(bytes[i]);
+            }
+            const b64 = typeof btoa !== "undefined" ? btoa(binary) : "";
+            if (b64) formattedImageBase64 = `data:${mimeType};base64,${b64}`;
+          }
+        } catch (e) {
+          console.warn("Failed to fetch image URL in edge function:", e);
+        }
+      }
+    }
+
     // 2. Panggil Kobil LLM (format OpenAI-compatible chat completions dengan image input)
     const response = await fetch(endpoint, {
       method: "POST",
@@ -115,7 +140,7 @@ export async function handleEnhanceImage(req: Request): Promise<Response> {
               },
               {
                 type: "image_url",
-                image_url: { url: imageBase64 },
+                image_url: { url: formattedImageBase64 },
               },
             ],
           },

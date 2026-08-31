@@ -171,11 +171,27 @@ export const KobilLlmConfigView: React.FC = () => {
         `Provider: ${imageProvider} | Model: ${imageModel}\nAuthorization: Bearer ${maskedKeyDisplay}\nPrompt: "${testPrompt.trim()}"`
       );
 
+      let imageBase64DataUrl = testOriginalUrl;
+      if (!imageBase64DataUrl.startsWith('data:image/')) {
+        addLog('info', 'Mengonversi URL foto sampel menjadi Base64 Data URL (data:image/jpeg;base64,...)...');
+        try {
+          const res = await fetch(testOriginalUrl);
+          const blob = await res.blob();
+          imageBase64DataUrl = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result as string);
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+          });
+        } catch (_) {}
+      }
+
       const { data, error } = await supabase.functions.invoke('enhance-image', {
         body: {
           preset: testPrompt.trim(),
           original_url: testOriginalUrl,
           file_path: testOriginalUrl,
+          image_base64: imageBase64DataUrl,
           api_key: cleanActiveKey,
         },
         headers: {
