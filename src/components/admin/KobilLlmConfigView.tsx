@@ -108,8 +108,8 @@ export const DEFAULT_AI_CONFIG = {
     providerName: 'kobil_llm' as const,
     baseUrl: 'https://api.koboillm.com/v1',
     apiKey: 'sk-koboi-live-99887766554433221100',
-    modelName: 'gemini-2.5-flash',
-    availableModels: ['gemini-2.5-flash', 'gemini-2.0-flash', 'gpt-4o-mini', 'gpt-4o', 'claude-3-5-sonnet', 'deepseek-chat'],
+    modelName: 'gemini/gemini-2.5-flash',
+    availableModels: ['gemini/gemini-2.5-flash', 'gemini/gemini-2.0-flash', 'openai/gpt-4o-mini', 'openai/gpt-4o', 'anthropic/claude-3-5-sonnet', 'deepseek/deepseek-chat'],
   },
   imageConfig: {
     purpose: 'image_generation' as const,

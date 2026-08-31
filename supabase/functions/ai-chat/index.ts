@@ -5,12 +5,20 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+export interface ChatMessageContentItem {
+  type: "text" | "image_url";
+  text?: string;
+  image_url?: { url: string; detail?: string };
+}
+
 export interface ChatRequest {
   base_url?: string;
   api_key?: string;
   provider_name?: string;
   model?: string;
-  messages?: Array<{ role: string; content: string }>;
+  image_url?: string;
+  image_base64?: string;
+  messages?: Array<{ role: string; content: string | ChatMessageContentItem[] }>;
 }
 
 export async function handleAiChat(req: Request): Promise<Response> {
@@ -23,15 +31,34 @@ export async function handleAiChat(req: Request): Promise<Response> {
   try {
     const payload: ChatRequest = await req.json();
 
-    // Auto-fix domain spelling: koboiillm.com -> koboillm.com
-    let baseUrl = (payload.base_url || "https://api.koboillm.com/v1")
+    const baseUrl = (payload.base_url || "https://api.koboillm.com/v1")
       .trim()
-      .replace("koboiillm.com", "koboillm.com")
       .replace(/\/$/, "");
 
     let apiKey = payload.api_key || "";
-    const model = payload.model || "gemini-2.5-flash";
-    const messages = payload.messages || [{ role: "user", content: "Halo" }];
+    const model = payload.model || "gemini/gemini-2.5-flash";
+    let messages = payload.messages || [{ role: "user", content: "Halo" }];
+
+    // If an image URL or image_base64 is passed at top level, format multimodal vision message per docs.koboillm.com/vision
+    const inputVisionImg = payload.image_url || payload.image_base64;
+    if (inputVisionImg) {
+      let formattedImg = inputVisionImg;
+      if (!formattedImg.startsWith("data:") && !formattedImg.startsWith("http")) {
+        formattedImg = `data:image/jpeg;base64,${formattedImg}`;
+      }
+      const lastUserMsgIndex = [...messages].reverse().findIndex((m) => m.role === "user");
+      if (lastUserMsgIndex !== -1) {
+        const realIdx = messages.length - 1 - lastUserMsgIndex;
+        const origContent = typeof messages[realIdx].content === "string" ? messages[realIdx].content : "Analisis gambar ini";
+        messages[realIdx] = {
+          role: "user",
+          content: [
+            { type: "text", text: origContent as string },
+            { type: "image_url", image_url: { url: formattedImg, detail: "auto" } },
+          ],
+        };
+      }
+    }
 
     // Read key from DB if masked or missing
     if (!apiKey || apiKey.startsWith("••••") || apiKey.includes("...")) {
