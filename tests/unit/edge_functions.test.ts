@@ -167,9 +167,10 @@ describe('Edge Function: enhance-image Endpoint', () => {
           { status: 200, headers: { 'Content-Type': 'application/json' } }
         );
       }
-      if (urlStr.includes('/chat/completions')) {
+      if (urlStr.includes('/images/edits') || urlStr.includes('/chat/completions')) {
         return new Response(
           JSON.stringify({
+            data: [{ url: 'https://koboillm.storage/result_hd_99.png' }],
             choices: [
               {
                 message: {
@@ -206,11 +207,12 @@ describe('Edge Function: enhance-image Endpoint', () => {
 
     // Verify proxy call headers
     const proxyCalls = mockFetch.mock.calls.filter(([callUrl]) =>
+      (typeof callUrl === 'string' ? callUrl : callUrl.toString()).includes('/images/edits') ||
       (typeof callUrl === 'string' ? callUrl : callUrl.toString()).includes('/chat/completions')
     );
     expect(proxyCalls.length).toBe(1);
     const [proxyUrl, proxyOptions] = proxyCalls[0];
-    expect(proxyUrl).toBe('https://api.koboillm.com/v1/chat/completions');
+    expect(proxyUrl).toBe('https://api.koboillm.com/v1/images/edits');
     expect(proxyOptions.headers['Authorization']).toBe('Bearer sk-koboi-live-99887766554433221100');
   });
 
@@ -232,7 +234,7 @@ describe('Edge Function: enhance-image Endpoint', () => {
           { status: 200, headers: { 'Content-Type': 'application/json' } }
         );
       }
-      if (urlStr.includes('/chat/completions')) {
+      if (urlStr.includes('/images/edits') || urlStr.includes('/chat/completions')) {
         return new Response(errorBody, {
           status: 401,
           headers: { 'Content-Type': 'application/json' },
@@ -281,7 +283,7 @@ describe('Edge Function: enhance-image Endpoint', () => {
           { status: 200, headers: { 'Content-Type': 'application/json' } }
         );
       }
-      if (urlStr.includes('/chat/completions')) {
+      if (urlStr.includes('/images/edits') || urlStr.includes('/chat/completions')) {
         return new Response(error400Body, {
           status: 400,
           headers: { 'Content-Type': 'application/json' },
@@ -329,10 +331,11 @@ describe('Edge Function: enhance-image Endpoint', () => {
           { status: 200, headers: { 'Content-Type': 'application/json' } }
         );
       }
-      if (urlStr.includes('/chat/completions')) {
+      if (urlStr.includes('/images/edits') || urlStr.includes('/chat/completions')) {
         capturedAuthHeader = (init?.headers as any)?.['Authorization'] || '';
         return new Response(
           JSON.stringify({
+            data: [{ url: 'https://koboillm.storage/result_stripped.png' }],
             choices: [
               { message: { images: [{ image_url: { url: 'https://koboillm.storage/result_stripped.png' } }] } },
             ],

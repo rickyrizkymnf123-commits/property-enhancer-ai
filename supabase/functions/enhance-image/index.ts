@@ -93,10 +93,10 @@ export async function handleEnhanceImage(req: Request): Promise<Response> {
     }
     apiKey = apiKey.replace(/^Bearer\s+/i, '').trim();
 
-    const baseUrl = (config.base_url || "https://api.koboillm.com/v1").trim().replace("koboiillm.com", "koboillm.com").replace(/\/$/, "");
-    const endpoint = `${baseUrl}/chat/completions`;
+    const baseUrl = config.base_url.trim().replace(/\/$/, "");
+    const endpoint = `${baseUrl}/images/edits`;
 
-    // Ensure imageBase64 has full data:image/...;base64, Data URL header expected by LiteLLM Proxy
+    // Ensure imageBase64 has full data:image/...;base64 Data URL header
     let formattedImageBase64 = imageBase64 || "";
     if (formattedImageBase64 && !formattedImageBase64.startsWith("data:image/")) {
       if (/^[A-Za-z0-9+/=]+$/.test(formattedImageBase64.substring(0, 100).replace(/\s/g, ""))) {
@@ -121,165 +121,56 @@ export async function handleEnhanceImage(req: Request): Promise<Response> {
       }
     }
 
-    const pLower = (prompt || "").toLowerCase();
-    let visualDirectives = "";
-    if (pLower.includes("malam") || pLower.includes("night") || pLower.includes("dusk") || pLower.includes("twilight") || pLower.includes("gelap")) {
-      visualDirectives += " [Visual Directive: Transform the lighting to dark night sky with dark navy blue atmosphere, warm illuminated porch lights, glowing windows, and high contrast nighttime property photography.]";
-    }
-    if (pLower.includes("pagar") || pLower.includes("fence")) {
-      visualDirectives += " [Visual Directive: Add a modern perimeter fence in front of the house.]";
-    }
-    if (pLower.includes("kanopi") || pLower.includes("canopy")) {
-      visualDirectives += " [Visual Directive: Add a sleek carport canopy over the driveway.]";
-    }
-    if (pLower.includes("siang") || pLower.includes("bright") || pLower.includes("sun")) {
-      visualDirectives += " [Visual Directive: Transform lighting to bright clear sunny day with blue sky.]";
+    // 1. Decode image_base64 (Data URL) menjadi Blob untuk dikirim sebagai file
+    function dataUrlToBlob(dataUrl: string): { blob: Blob; mimeType: string } {
+      const parts = dataUrl.split(",");
+      const header = parts[0] || "";
+      const base64Data = parts[1] || dataUrl;
+      const mimeMatch = header.match(/data:(.*?);base64/);
+      const mimeType = mimeMatch ? mimeMatch[1] : "image/jpeg";
+      const binary = atob(base64Data);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      return { blob: new Blob([bytes], { type: mimeType }), mimeType };
     }
 
-    const fullPromptText = `Edit this exact photo. Keep the building structure and camera angle exactly the same. ${prompt}.${visualDirectives}`;
+    const { blob: imageBlob, mimeType } = dataUrlToBlob(formattedImageBase64);
+    const ext = mimeType.includes("png") ? "png" : "jpg";
 
-    let response: Response | null = null;
-    let editModel = config.model_name || "openai/gpt-image-1.5";
+    // 2. Build multipart form-data sesuai spesifikasi resmi §5.1
+    const fullPromptText = `${prompt}. Keep the building structure, architecture, and camera angle exactly the same unless explicitly asked to change them.`;
 
-    // 2. Strategi Utama KoboiLLM Docs §5.1: POST /images/edits via multipart/form-data
-    if (editModel.includes("gpt-image") || editModel.includes("openai/") || editModel === "openai/gpt-image-1.5") {
-      try {
-        const editsEndpoint = `${baseUrl}/images/edits`;
-        const formData = new FormData();
-        formData.append("model", editModel.startsWith("openai/") ? editModel : `openai/${editModel}`);
-        formData.append("prompt", fullPromptText);
-        formData.append("size", "1024x1024");
-        formData.append("quality", "high");
+    const form = new FormData();
+    form.append("model", config.model_name); // contoh: gemini/gemini-2.5-flash-image atau openai/gpt-image-1.5
+    form.append("image", imageBlob, `original.${ext}`);
+    form.append("prompt", fullPromptText);
+    form.append("size", "1024x1024");
+    form.append("quality", "high");
 
-        if (formattedImageBase64.startsWith("data:")) {
-          const parts = formattedImageBase64.split(",");
-          const mime = parts[0].match(/:(.*?);/)?.[1] || "image/jpeg";
-          const bstr = atob(parts[1]);
-          let n = bstr.length;
-          const u8arr = new Uint8Array(n);
-          while (n--) {
-            u8arr[n] = bstr.charCodeAt(n);
-          }
-          const imageBlob = new Blob([u8arr], { type: mime });
-          formData.append("image", imageBlob, "input_photo.jpg");
-        }
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${apiKey}`,
+        // Biarkan runtime set boundary multipart otomatis
+      },
+      body: form,
+    });
 
-        const editsRes = await fetch(editsEndpoint, {
-          method: "POST",
-          headers: {
-            "Authorization": `Bearer ${apiKey}`,
-          },
-          body: formData,
-        });
-
-        if (editsRes.ok) {
-          response = editsRes;
-        }
-      } catch (editsErr) {
-        console.warn("KoboiLLM /images/edits endpoint call failed, falling back:", editsErr);
-      }
-    }
-
-    // 3. Fallback Strategi B (KoboiLLM Docs §5.4): POST /chat/completions
-    if (!response) {
-      response = await fetch(endpoint, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify({
-          model: config.model_name || "gemini-2.5-flash-image",
-          messages: [
-            {
-              role: "user",
-              content: [
-                {
-                  type: "text",
-                  text: fullPromptText,
-                },
-                {
-                  type: "image_url",
-                  image_url: { url: formattedImageBase64 },
-                },
-              ],
-            },
-          ],
-        }),
-      });
-    }
-
-    // 4. WAJIB: kalau HTTP status bukan 200, tampilkan body response ASLI
     if (!response.ok) {
       const errText = await response.text();
-      throw new Error(`Kobil LLM HTTP ${response.status}: ${errText.substring(0, 500)}`);
+      throw new Error(`Kobil LLM HTTP ${response.status} (${endpoint}): ${errText.substring(0, 500)}`);
     }
 
     const json = await response.json();
 
-    // 4. Cari gambar hasil di beberapa kemungkinan lokasi field
-    let imageResult =
-      json?.choices?.[0]?.message?.images?.[0]?.image_url?.url ||
-      json?.choices?.[0]?.message?.images?.[0]?.b64_json ||
-      json?.choices?.[0]?.message?.images?.[0]?.url ||
-      json?.choices?.[0]?.message?.images?.[0] ||
-      json?.data?.[0]?.b64_json ||
-      json?.data?.[0]?.url ||
-      null;
-
-    // Check message.content for markdown image ![image](data:...) or Data URL string
-    if (!imageResult && json?.choices?.[0]?.message?.content) {
-      const contentStr = String(json.choices[0].message.content).trim();
-      const mdMatch = contentStr.match(/!\[.*?\]\((data:image\/[^)]+|https?:\/\/[^)]+)\)/);
-      if (mdMatch && mdMatch[1]) {
-        imageResult = mdMatch[1];
-      } else if (contentStr.startsWith("data:image/") || contentStr.startsWith("http://") || contentStr.startsWith("https://")) {
-        imageResult = contentStr;
-      } else if (contentStr.length > 500 && /^[A-Za-z0-9+/=]+$/.test(contentStr.substring(0, 100).replace(/\s/g, ""))) {
-        imageResult = `data:image/jpeg;base64,${contentStr}`;
-      }
-    }
-
-    // 5. Fallback Strategy B: Panggil /images/generations jika /chat/completions tidak mengembalikan array gambar
-    if (!imageResult) {
-      const genEndpoint = `${baseUrl}/images/generations`;
-      try {
-        const genRes = await fetch(genEndpoint, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${apiKey}`,
-          },
-          body: JSON.stringify({
-            model: config.model_name || "gemini-2.5-flash-image",
-            prompt: `Edit property photo: ${prompt}. Photo base64 data: ${formattedImageBase64.substring(0, 300)}`,
-            n: 1,
-            size: "1024x1024",
-            response_format: "b64_json",
-          }),
-        });
-        if (genRes.ok) {
-          const genJson = await genRes.json();
-          imageResult =
-            genJson?.data?.[0]?.b64_json ||
-            genJson?.data?.[0]?.url ||
-            genJson?.images?.[0]?.url ||
-            genJson?.images?.[0] ||
-            null;
-        }
-      } catch (genErr) {
-        console.warn("Fallback /images/generations failed:", genErr);
-      }
-    }
+    // 3. Struktur respons SESUAI DOKUMENTASI RESMI §6 — data[0].url atau data[0].b64_json
+    const imageResult = json?.data?.[0]?.url || json?.data?.[0]?.b64_json || null;
 
     if (!imageResult) {
-      throw new Error(`Response Kobil LLM tidak mengandung gambar. Struktur response: ${JSON.stringify(json).substring(0, 800)}`);
+      throw new Error(`Response Kobil LLM tidak mengandung data[0].url atau data[0].b64_json. Response: ${JSON.stringify(json).substring(0, 800)}`);
     }
 
     let finalEnhancedUrl = imageResult;
-    if (typeof finalEnhancedUrl === 'object' && finalEnhancedUrl?.url) {
-      finalEnhancedUrl = finalEnhancedUrl.url;
-    }
     if (typeof finalEnhancedUrl === 'string' && !finalEnhancedUrl.startsWith("data:") && !finalEnhancedUrl.startsWith("http")) {
       finalEnhancedUrl = `data:image/jpeg;base64,${finalEnhancedUrl}`;
     }

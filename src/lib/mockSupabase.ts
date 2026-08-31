@@ -6,8 +6,6 @@
  * Supabase Storage buckets, Realtime event multiplexer, and Edge Function handlers.
  */
 
-import { generateEnhancedImageDataUrl } from './aiImageEnhancer';
-
 export type AppRole = 'admin' | 'user';
 export type AdminActionType =
   | 'approve_user'
@@ -1394,109 +1392,47 @@ export class MockFunctionsClient {
       }
     }
 
-    const pLower = (inputPrompt || '').toLowerCase();
-    let visualDirectives = '';
-    if (pLower.includes('malam') || pLower.includes('night') || pLower.includes('dusk') || pLower.includes('twilight') || pLower.includes('gelap')) {
-      visualDirectives += ' [Visual Directive: Transform the lighting to dark night sky with dark navy blue atmosphere, warm illuminated porch lights, glowing windows, and high contrast nighttime property photography.]';
-    }
-    if (pLower.includes('pagar') || pLower.includes('fence')) {
-      visualDirectives += ' [Visual Directive: Add a modern perimeter fence in front of the house.]';
-    }
-    if (pLower.includes('kanopi') || pLower.includes('canopy')) {
-      visualDirectives += ' [Visual Directive: Add a sleek carport canopy over the driveway.]';
-    }
-    if (pLower.includes('siang') || pLower.includes('bright') || pLower.includes('sun')) {
-      visualDirectives += ' [Visual Directive: Transform lighting to bright clear sunny day with blue sky.]';
-    }
-
-    const fullPromptText = `Edit this exact photo. Keep the building structure and camera angle exactly the same. ${inputPrompt}.${visualDirectives}`;
+    const fullPromptText = `${inputPrompt}. Keep the building structure, architecture, and camera angle exactly the same unless explicitly asked to change them.`;
 
     if (inputImageBase64 && typeof window !== 'undefined' && !(typeof process !== 'undefined' && process.env?.VITEST)) {
       try {
-        const endpoint = `${rawBaseUrl}/chat/completions`;
+        const endpoint = `${rawBaseUrl}/images/edits`;
+
+        const parts = inputImageBase64.split(',');
+        const header = parts[0] || '';
+        const base64Data = parts[1] || inputImageBase64;
+        const mimeMatch = header.match(/data:(.*?);base64/);
+        const mimeType = mimeMatch ? mimeMatch[1] : 'image/jpeg';
+        const binary = atob(base64Data);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+        const imageBlob = new Blob([bytes], { type: mimeType });
+        const ext = mimeType.includes('png') ? 'png' : 'jpg';
+
+        const form = new FormData();
+        form.append('model', modelName);
+        form.append('image', imageBlob, `original.${ext}`);
+        form.append('prompt', fullPromptText);
+        form.append('size', '1024x1024');
+        form.append('quality', 'high');
+
         const res = await fetch(endpoint, {
           method: 'POST',
           headers: {
-            'Content-Type': 'application/json',
             'Authorization': `Bearer ${rawApiKey}`,
           },
-          body: JSON.stringify({
-            model: modelName,
-            messages: [
-              {
-                role: 'user',
-                content: [
-                  {
-                    type: 'text',
-                    text: fullPromptText,
-                  },
-                  {
-                    type: 'image_url',
-                    image_url: { url: inputImageBase64 },
-                  },
-                ],
-              },
-            ],
-          }),
+          body: form,
         });
 
         if (!res.ok) {
           const errText = await res.text();
-          rawApiError = `Kobil LLM HTTP ${res.status}: ${errText.substring(0, 500)}`;
+          rawApiError = `Kobil LLM HTTP ${res.status} (${endpoint}): ${errText.substring(0, 500)}`;
         } else {
           const json = await res.json();
-          let imageResult =
-            json?.choices?.[0]?.message?.images?.[0]?.image_url?.url ||
-            json?.choices?.[0]?.message?.images?.[0]?.b64_json ||
-            json?.choices?.[0]?.message?.images?.[0]?.url ||
-            json?.choices?.[0]?.message?.images?.[0] ||
-            json?.data?.[0]?.b64_json ||
-            json?.data?.[0]?.url ||
-            null;
-
-          if (!imageResult && json?.choices?.[0]?.message?.content) {
-            const contentStr = String(json.choices[0].message.content).trim();
-            const mdMatch = contentStr.match(/!\[.*?\]\((data:image\/[^)]+|https?:\/\/[^)]+)\)/);
-            if (mdMatch && mdMatch[1]) {
-              imageResult = mdMatch[1];
-            } else if (contentStr.startsWith("data:image/") || contentStr.startsWith("http://") || contentStr.startsWith("https://")) {
-              imageResult = contentStr;
-            } else if (contentStr.length > 500 && /^[A-Za-z0-9+/=]+$/.test(contentStr.substring(0, 100).replace(/\s/g, ""))) {
-              imageResult = `data:image/jpeg;base64,${contentStr}`;
-            }
-          }
+          const imageResult = json?.data?.[0]?.url || json?.data?.[0]?.b64_json || null;
 
           if (!imageResult) {
-            const genEndpoint = `${rawBaseUrl}/images/generations`;
-            try {
-              const genRes = await fetch(genEndpoint, {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                  "Authorization": `Bearer ${rawApiKey}`,
-                },
-                body: JSON.stringify({
-                  model: modelName || "gemini-2.5-flash-image",
-                  prompt: `Edit property photo: ${inputPrompt}. Photo base64 data: ${inputImageBase64.substring(0, 300)}`,
-                  n: 1,
-                  size: "1024x1024",
-                  response_format: "b64_json",
-                }),
-              });
-              if (genRes.ok) {
-                const genJson = await genRes.json();
-                imageResult =
-                  genJson?.data?.[0]?.b64_json ||
-                  genJson?.data?.[0]?.url ||
-                  genJson?.images?.[0]?.url ||
-                  genJson?.images?.[0] ||
-                  null;
-              }
-            } catch (_) {}
-          }
-
-          if (!imageResult) {
-            rawApiError = `Response Kobil LLM tidak mengandung gambar. Struktur response: ${JSON.stringify(json).substring(0, 800)}`;
+            rawApiError = `Response Kobil LLM tidak mengandung data[0].url atau data[0].b64_json. Response: ${JSON.stringify(json).substring(0, 800)}`;
           } else {
             let finalUrl = typeof imageResult === 'object' && imageResult?.url ? imageResult.url : imageResult;
             enhancedResultUrl = typeof finalUrl === 'string' && (finalUrl.startsWith('data:') || finalUrl.startsWith('http'))

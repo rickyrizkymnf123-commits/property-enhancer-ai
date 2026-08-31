@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from './useAuth';
 import type { ImageRecord, ImageStatus } from '../types/database.types';
-import { generateEnhancedImageDataUrl } from '../lib/aiImageEnhancer';
 
 export interface EnhancementOptions {
   file?: File | Blob;
@@ -159,10 +158,13 @@ export function useRealtimeEnhancement(): UseRealtimeEnhancementReturn {
         setStatus('done');
         setEnhancedUrl(returnedEnhancedUrl);
       } else {
-        const sourceForEnhance = file || imageBase64DataUrl || finalOriginalUrl;
-        const displayDataUrl = await generateEnhancedImageDataUrl(sourceForEnhance, preset);
-        setStatus('done');
-        setEnhancedUrl(displayDataUrl);
+        // JANGAN PERNAH fallback ke canvas/simulasi apapun.
+        // Kalau server bilang sukses tapi tidak ada enhanced_url, itu BUG di server — tampilkan sebagai error.
+        setStatus('failed');
+        setEnhancedUrl(null);
+        const errMsg = 'Server melaporkan sukses tapi tidak mengembalikan enhanced_url. Ini bug di edge function, laporkan ke admin.';
+        setErrorMessage(errMsg);
+        return { success: false, error: errMsg };
       }
 
       return { success: true, data };

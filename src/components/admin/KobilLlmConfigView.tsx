@@ -21,7 +21,6 @@ import { useToast } from '../../hooks/useToast';
 import { maskApiKey } from '../../lib/maskUtils';
 import { clsx as cn } from 'clsx';
 import { BeforeAfterSlider } from '../studio/BeforeAfterSlider';
-import { generateEnhancedImageDataUrl } from '../../lib/aiImageEnhancer';
 
 export interface TestLogEntry {
   timestamp: string;
@@ -66,14 +65,11 @@ export const DEFAULT_AI_CONFIG = {
     providerName: 'kobil_llm' as const,
     baseUrl: 'https://api.koboillm.com/v1',
     apiKey: 'sk-koboi-live-99887766554433221100',
-    modelName: 'gemini-2.5-flash-image',
+    modelName: 'gemini/gemini-2.5-flash-image',
     availableModels: [
+      'gemini/gemini-2.5-flash-image',
       'openai/gpt-image-1.5',
-      'gemini-2.5-flash-image',
       'vertex_ai/imagen-4.0-fast-generate-001',
-      'gemini-2.5-flash-image-preview',
-      'gpt-image-1',
-      'imagen-3',
     ],
   },
 };
@@ -298,8 +294,8 @@ export const KobilLlmConfigView: React.FC = () => {
             if (parsed.imageConfig) {
               const prov = parsed.imageConfig.providerName === 'lovable' ? 'kobil_llm' : parsed.imageConfig.providerName;
               const url = parsed.imageConfig.baseUrl?.includes('lovable.ai') ? 'https://api.koboillm.com/v1' : normalizeUrl(parsed.imageConfig.baseUrl);
-              const model = parsed.imageConfig.modelName?.includes('google/') || parsed.imageConfig.modelName === 'gemini-2.5-flash'
-                ? 'gemini-2.5-flash-image'
+              const model = parsed.imageConfig.modelName?.includes('google/') || parsed.imageConfig.modelName === 'gemini-2.5-flash' || parsed.imageConfig.modelName === 'gemini-2.5-flash-image'
+                ? 'gemini/gemini-2.5-flash-image'
                 : cleanModelName(parsed.imageConfig.modelName);
 
               if (prov) setImageProvider(prov);

@@ -484,7 +484,7 @@ describe('Adversarial Stress Testing & Edge-Case Verification (Milestone 7)', ()
             { status: 200, headers: { 'Content-Type': 'application/json' } }
           );
         }
-        if (urlStr.includes('/chat/completions')) {
+        if (urlStr.includes('/images/edits') || urlStr.includes('/chat/completions')) {
           return new Response(
             JSON.stringify({ error: { message: 'Quota limit exceeded for organization', code: 'forbidden' } }),
             { status: 403, headers: { 'Content-Type': 'application/json' } }
@@ -590,9 +590,10 @@ describe('Adversarial Stress Testing & Edge-Case Verification (Milestone 7)', ()
             { status: 200, headers: { 'Content-Type': 'application/json' } }
           );
         }
-        if (urlStr.includes('/chat/completions')) {
+        if (urlStr.includes('/images/edits') || urlStr.includes('/chat/completions')) {
           return new Response(
             JSON.stringify({
+              data: [{ url: rawBase64 }],
               choices: [{ message: { images: [{ image_url: { url: rawBase64 } }] } }],
             }),
             { status: 200, headers: { 'Content-Type': 'application/json' } }
