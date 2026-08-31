@@ -182,7 +182,8 @@ export const KobilLlmConfigView: React.FC = () => {
       if (error || data?.error) {
         const errMsg = data?.error || error?.message || 'Error memproses AI Image Generation';
         setImageTestError(errMsg);
-        toast.warning('Pengujian Dijalankan', 'AI Engine memproses pengolahan gambar.');
+        setTestEnhancedUrl(null);
+        toast.error('Pengujian Gagal', errMsg);
       } else {
         toast.success('Pengujian AI Studio Sukses!', `Hasil AI berhasil digenerate dalam ${latencyMs}ms.`);
       }

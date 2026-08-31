@@ -82,7 +82,7 @@ export const EditorPage: React.FC = () => {
   };
 
   const effectiveOriginalUrl = previewUrl || originalUrl || '';
-  const isDone = status === 'done' && !!enhancedUrl;
+  const isDone = status === 'done' && !!enhancedUrl && !errorMessage;
 
   return (
     <div className="min-h-screen bg-slate-950 flex" data-testid="editor-page">

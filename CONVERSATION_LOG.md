@@ -68,3 +68,8 @@
    - **Direct Kobil LLM `POST /chat/completions` Path**: Edge function `enhance-image` and `mockSupabase.ts` route directly to `https://api.koboillm.com/v1/chat/completions` with `{ type: 'image_url', image_url: { url: base64DataUrl } }` and user free-text prompt ("tambahkan pagar putih dan kanopi...").
    - **Raw Error Transparency**: Raw HTTP responses and JSON structures are reported directly in UI Toast and Red Alert Banners without generic fallback wrappers.
    - **Verified Build & Tests**: 100% test pass rate (340/340) and clean production build (`built in 2.33s`). Committed and pushed to GitHub commit `0ba2a58`.
+
+13. **AI Studio Image Enhancement Error Handling & Kobil LLM Proxy Auth Integration**:
+   - **Strict Error Guard & Result View Suppression**: Hide/suppress Before/After slider and "SESUDAH (AI)" fallback image when AI API returns HTTP error (e.g. 401, 400, 500); display prominent error card with raw server JSON error message.
+   - **Kobil LLM Proxy API Key & Token Credentials Resolution**: Ensure active Admin/User API key is passed cleanly in `Authorization: Bearer <key>` header to `https://api.koboillm.com/v1/chat/completions` across `KobilLlmConfigView.tsx`, `useRealtimeEnhancement.ts`, `mockSupabase.ts`, and `supabase/functions/enhance-image/index.ts`.
+   - **100% Tests Pass**: Maintain full pass rate across Vitest unit and E2E test suites.

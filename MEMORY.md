@@ -21,3 +21,8 @@
 
 4. **Testing Standards**:
    - Full Vitest suite covers 340 tests across 11 files (`npm run test` passes 100%).
+
+5. **Error Guarding & Kobil LLM Proxy Auth**:
+   - Strict suppression of Before/After slider & fallback result images on any AI HTTP error (401, 400, 500). Raw JSON error displayed prominently in alert card.
+   - Clean Bearer token propagation across KobilLlmConfigView, useRealtimeEnhancement, mockSupabase, and enhance-image edge function.
+
