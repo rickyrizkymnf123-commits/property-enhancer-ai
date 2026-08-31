@@ -96,6 +96,11 @@
    - **LocalStorage Auto-Purge**: Component mount sanitizes stale `lovable` cache to ensure Admin Panel strictly resolves to `kobil_llm` and `gemini-2.5-flash-image`.
    - **Verified Build & Tests**: 100% test pass rate across 369 tests and clean production build (`built in 2.33s`). Committed and pushed to GitHub commit `9fe08a3`.
 
+18. **Prompt Visual Directives & Deep Night Sky Atmosphere Enhancement**:
+   - **Bilingual Visual Directives Enrichment**: Enhanced `enhance-image/index.ts` and `mockSupabase.ts` to enrich user prompts (e.g. "tolong ubaj jadi suasana malam" / "pagar" / "kanopi") with rich visual directives (`[Visual Directive: Transform lighting to dark night sky with dark navy blue atmosphere, warm illuminated porch lights, glowing windows...]`).
+   - **High-Contrast Night Sky & Architectural Overlays**: Upgraded `src/lib/aiImageEnhancer.ts` with deep midnight blue sky gradients (`rgba(4, 9, 26, 0.88)`), full-image night mood contrast filters, warm golden radial window glows (`rgba(255, 190, 60, 0.65)`), front perimeter fence overlays, and carport canopy structures.
+   - **Verified Build & Tests**: 100% test pass rate across 369 tests and clean production build (`built in 2.38s`). Committed and pushed to GitHub commit `a5b5235`.
+
 14. **Investigation of Error Guard & Result View Suppression in AI Studio & Editor (Explorer 1)**:
    - Investigated `EditorPage.tsx`, `useRealtimeEnhancement.ts`, `KobilLlmConfigView.tsx`, `BeforeAfterSlider.tsx`, `mockSupabase.ts`, and `supabase/functions/enhance-image/index.ts`.
    - Identified critical fixes:
