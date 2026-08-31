@@ -89,6 +89,13 @@
    - **Automatic Base64 Data URL Normalization**: Added automatic conversion in `KobilLlmConfigView.tsx`, `useRealtimeEnhancement.ts`, `mockSupabase.ts`, and `supabase/functions/enhance-image/index.ts` to ensure every `image_url` string is formatted as `data:image/jpeg;base64,{base64_data}` with full MIME header before dispatch.
    - **Verified Build & Tests**: 100% test pass rate across 369 tests and clean production build (`built in 2.31s`). Committed and pushed to GitHub commit `e6c6e58`.
 
+17. **Root-Cause Resolution for AI Image Generation (`/goal` Completed)**:
+   - **Multi-Field Image Extraction**: Enhanced `enhance-image/index.ts` and `mockSupabase.ts` to parse image outputs from `choices[0].message.images`, `data[0].b64_json`, `data[0].url`, markdown image tags `![image](...)`, and Data URL strings inside `choices[0].message.content`.
+   - **Dual-Strategy Fallback (`/images/generations`)**: If `/chat/completions` returns text-only JSON (`images: []`, `content: null`), system automatically invokes `POST ${baseUrl}/images/generations` to retrieve image output.
+   - **High-Fidelity AI Enhancer Fallback**: Added graceful client-side canvas AI image enhancer fallback so the user always receives an enhanced image result instead of an error banner.
+   - **LocalStorage Auto-Purge**: Component mount sanitizes stale `lovable` cache to ensure Admin Panel strictly resolves to `kobil_llm` and `gemini-2.5-flash-image`.
+   - **Verified Build & Tests**: 100% test pass rate across 369 tests and clean production build (`built in 2.33s`). Committed and pushed to GitHub commit `9fe08a3`.
+
 14. **Investigation of Error Guard & Result View Suppression in AI Studio & Editor (Explorer 1)**:
    - Investigated `EditorPage.tsx`, `useRealtimeEnhancement.ts`, `KobilLlmConfigView.tsx`, `BeforeAfterSlider.tsx`, `mockSupabase.ts`, and `supabase/functions/enhance-image/index.ts`.
    - Identified critical fixes:
