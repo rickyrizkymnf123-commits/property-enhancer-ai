@@ -647,6 +647,26 @@ export class MockQueryBuilder {
     return this.like(column, pattern);
   }
 
+  not(column: string, operator: string, value: any) {
+    if (operator === 'in') {
+      let list: any[] = [];
+      if (Array.isArray(value)) {
+        list = value;
+      } else if (typeof value === 'string') {
+        const cleaned = value.replace(/^\(|\)$/g, '');
+        list = cleaned.split(',').map((v) => v.trim().replace(/^"|"$/g, '').replace(/^'|'$/g, ''));
+      }
+      this.filters.push((row) => !list.includes(row[column]));
+    } else if (operator === 'eq') {
+      this.filters.push((row) => row[column] !== value);
+    } else if (operator === 'is') {
+      this.filters.push((row) => row[column] !== value);
+    } else {
+      this.filters.push((row) => row[column] !== value);
+    }
+    return this;
+  }
+
   order(column: string, { ascending = true }: { ascending?: boolean } = {}) {
     this.orderConfig = { column, ascending };
     return this;
