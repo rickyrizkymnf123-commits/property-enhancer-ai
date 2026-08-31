@@ -119,6 +119,11 @@ export const KobilLlmConfigView: React.FC = () => {
       return url.replace('koboiillm.com', 'koboillm.com').trim();
     };
 
+    const cleanModelName = (str?: string | null) => {
+      if (!str) return '';
+      return str.replace(/\[Image Capable\]/gi, '').replace(/[🖼️🤖⚡🌐]/gu, '').trim();
+    };
+
     const loadConfig = async () => {
       // 1. Try local storage first for fast local DB load
       try {
@@ -129,7 +134,7 @@ export const KobilLlmConfigView: React.FC = () => {
             if (parsed.chatConfig) {
               if (parsed.chatConfig.providerName) setChatProvider(parsed.chatConfig.providerName);
               if (parsed.chatConfig.baseUrl) setChatBaseUrl(normalizeUrl(parsed.chatConfig.baseUrl));
-              if (parsed.chatConfig.modelName) setChatModel(parsed.chatConfig.modelName);
+              if (parsed.chatConfig.modelName) setChatModel(cleanModelName(parsed.chatConfig.modelName));
               if (parsed.chatConfig.rawApiKey) {
                 setRawChatApiKey(parsed.chatConfig.rawApiKey);
                 setChatApiKeyInput(maskApiKey(parsed.chatConfig.rawApiKey));
@@ -138,7 +143,7 @@ export const KobilLlmConfigView: React.FC = () => {
             if (parsed.imageConfig) {
               if (parsed.imageConfig.providerName) setImageProvider(parsed.imageConfig.providerName);
               if (parsed.imageConfig.baseUrl) setImageBaseUrl(normalizeUrl(parsed.imageConfig.baseUrl));
-              if (parsed.imageConfig.modelName) setImageModel(parsed.imageConfig.modelName);
+              if (parsed.imageConfig.modelName) setImageModel(cleanModelName(parsed.imageConfig.modelName));
               if (parsed.imageConfig.rawApiKey) {
                 setRawImageApiKey(parsed.imageConfig.rawApiKey);
                 setImageApiKeyInput(maskApiKey(parsed.imageConfig.rawApiKey));
@@ -164,7 +169,7 @@ export const KobilLlmConfigView: React.FC = () => {
           if (chatRow) {
             if (chatRow.provider_name) setChatProvider(chatRow.provider_name);
             if (chatRow.base_url) setChatBaseUrl(normalizeUrl(chatRow.base_url));
-            if (chatRow.model_name) setChatModel(chatRow.model_name);
+            if (chatRow.model_name) setChatModel(cleanModelName(chatRow.model_name));
             if (chatRow.api_key_encrypted && !isMaskedKeyString(chatRow.api_key_encrypted)) {
               let decrypted = chatRow.api_key_encrypted;
               if (decrypted.startsWith('enc_v1_')) {
@@ -181,7 +186,7 @@ export const KobilLlmConfigView: React.FC = () => {
           if (imageRow) {
             if (imageRow.provider_name) setImageProvider(imageRow.provider_name);
             if (imageRow.base_url) setImageBaseUrl(normalizeUrl(imageRow.base_url));
-            if (imageRow.model_name) setImageModel(imageRow.model_name);
+            if (imageRow.model_name) setImageModel(cleanModelName(imageRow.model_name));
             if (imageRow.api_key_encrypted && !isMaskedKeyString(imageRow.api_key_encrypted)) {
               let decrypted = imageRow.api_key_encrypted;
               if (decrypted.startsWith('enc_v1_')) {
@@ -342,9 +347,14 @@ export const KobilLlmConfigView: React.FC = () => {
       const cleanChatBaseUrl = (chatBaseUrl || 'https://api.koboillm.com/v1').replace('koboiillm.com', 'koboillm.com').trim();
       const cleanImageBaseUrl = (imageBaseUrl || 'https://api.koboillm.com/v1').replace('koboiillm.com', 'koboillm.com').trim();
 
+      const cleanChatModel = chatModel.replace(/\[Image Capable\]/gi, '').replace(/[🖼️🤖⚡🌐]/gu, '').trim();
+      const cleanImageModel = imageModel.replace(/\[Image Capable\]/gi, '').replace(/[🖼️🤖⚡🌐]/gu, '').trim();
+
       // Update state
       setChatBaseUrl(cleanChatBaseUrl);
       setImageBaseUrl(cleanImageBaseUrl);
+      setChatModel(cleanChatModel);
+      setImageModel(cleanImageModel);
       setRawChatApiKey(chatKeyToSave);
       setRawImageApiKey(imageKeyToSave);
       setChatApiKeyInput(maskApiKey(chatKeyToSave));
@@ -355,8 +365,8 @@ export const KobilLlmConfigView: React.FC = () => {
         localStorage.setItem(
           LOCAL_STORAGE_CONFIG_KEY,
           JSON.stringify({
-            chatConfig: { purpose: 'chat', providerName: chatProvider, baseUrl: cleanChatBaseUrl, modelName: chatModel, rawApiKey: chatKeyToSave },
-            imageConfig: { purpose: 'image_generation', providerName: imageProvider, baseUrl: cleanImageBaseUrl, modelName: imageModel, rawApiKey: imageKeyToSave },
+            chatConfig: { purpose: 'chat', providerName: chatProvider, baseUrl: cleanChatBaseUrl, modelName: cleanChatModel, rawApiKey: chatKeyToSave },
+            imageConfig: { purpose: 'image_generation', providerName: imageProvider, baseUrl: cleanImageBaseUrl, modelName: cleanImageModel, rawApiKey: imageKeyToSave },
             updatedAt: new Date().toISOString(),
           })
         );
@@ -378,7 +388,7 @@ export const KobilLlmConfigView: React.FC = () => {
             purpose: 'chat',
             provider_name: chatProvider,
             base_url: cleanChatBaseUrl,
-            model_name: chatModel,
+            model_name: cleanChatModel,
             api_key_encrypted: encryptedChatKey,
             is_active: true,
             is_default: true,
@@ -389,7 +399,7 @@ export const KobilLlmConfigView: React.FC = () => {
             purpose: 'image_generation',
             provider_name: imageProvider,
             base_url: cleanImageBaseUrl,
-            model_name: imageModel,
+            model_name: cleanImageModel,
             api_key_encrypted: encryptedImageKey,
             is_active: true,
             is_default: true,
@@ -816,14 +826,11 @@ export const KobilLlmConfigView: React.FC = () => {
                 onChange={(e) => setImageModel(e.target.value)}
                 className="w-full text-xs rounded-xl bg-slate-950 border border-purple-500/40 px-3 py-2.5 text-purple-300 font-bold focus:outline-none focus:ring-2 focus:ring-purple-500"
               >
-                {imageAvailableModels.map((m) => {
-                  const isImageCapable = m.toLowerCase().includes('image') || m.toLowerCase().includes('imagen') || m.toLowerCase().includes('dall');
-                  return (
-                    <option key={m} value={m}>
-                      {isImageCapable ? '🖼️ [Image Capable] ' : '🤖 '} {m}
-                    </option>
-                  );
-                })}
+                {imageAvailableModels.map((m) => (
+                  <option key={m} value={m}>
+                    {m}
+                  </option>
+                ))}
               </select>
             </div>
           </div>
