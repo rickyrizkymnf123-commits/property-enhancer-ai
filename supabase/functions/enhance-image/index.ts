@@ -15,22 +15,19 @@ export interface EnhanceRequest {
   preset?: string;
   projectId?: string;
   project_id?: string;
-  customApiKey?: string;
 }
 
 export const PRESET_PROMPTS: Record<string, string> = {
-  HDR_BALANCED: "Professional architectural real-estate photograph of a residential property exterior, bright crisp daylight, manicured green lawn, clear blue sky with soft white clouds, pristine paintwork, no cars, high dynamic range.",
-  exterior_daylight: "Professional architectural real-estate photograph of a residential property exterior, bright crisp daylight, manicured green lawn, clear blue sky with soft white clouds, pristine paintwork, no cars, high dynamic range.",
-  SKY_ENHANCE: "Real-estate exterior enhancement, lush vibrant green trimmed grass lawn, dramatic sunny blue sky with gentle clouds, flawless curb appeal.",
-  lawn_sky_replacement: "Real-estate exterior enhancement, lush vibrant green trimmed grass lawn, dramatic sunny blue sky with gentle clouds, flawless curb appeal.",
-  TWILIGHT: "Luxury real-estate dusk twilight exterior photo, warm golden hour sky gradient, ambient interior and exterior architectural warm lighting glowing from windows, reflection in clean driveway, modern upscale atmosphere.",
-  twilight_golden_hour: "Luxury real-estate dusk twilight exterior photo, warm golden hour sky gradient, ambient interior and exterior architectural warm lighting glowing from windows, reflection in clean driveway, modern upscale atmosphere.",
-  INTERIOR_BRIGHT: "Architectural interior design photograph, modern minimalist living room, natural sunlight through large clean windows, tidy furniture staging, warm oak textures, decluttered, wide angle, 8k crisp details.",
-  interior_modern_minimalist: "Architectural interior design photograph, modern minimalist living room, natural sunlight through large clean windows, tidy furniture staging, warm oak textures, decluttered, wide angle, 8k crisp details.",
-  interior_warm_luxury: "High-end luxury interior real-estate photography, warm architectural recessed lighting, elegant marble and hardwood flooring, tasteful modern staging, bright and airy feel.",
-  LAWN_GREEN: "Real-estate exterior lawn enhancement, vibrant manicured lush green lawn, sharp clean garden edging, high saturation nature appeal.",
-  declutter_clean: "Real estate interior photo decluttering, remove all personal items, wires, stray objects, immaculate clean surfaces, staged with professional interior decor.",
-  DECLUTTER: "Real estate interior photo decluttering, remove all personal items, wires, stray objects, immaculate clean surfaces, staged with professional interior decor.",
+  HDR_BALANCED:
+    "Edit this exact photo of the property. Keep the building structure, architecture, walls, roof, doors, windows, and camera angle exactly the same. Only enhance: make the sky bright blue with soft clouds, make the lawn vibrant green, correct exposure and color balance for a professional real estate listing photo. Do not add, remove, or change any structural elements.",
+  TWILIGHT:
+    "Edit this exact photo of the property. Keep the building structure, architecture, walls, roof, doors, windows, and camera angle exactly the same. Only enhance: transform the atmosphere into luxury dusk twilight with golden hour sky gradient, ambient warm glowing lights from windows and porch. Do not add, remove, or change any structural elements.",
+  INTERIOR_BRIGHT:
+    "Edit this exact photo of the interior property. Keep the furniture layout, walls, and architectural structure exactly the same. Only enhance: brighten natural light through windows, balance interior shadows, and sharpen textures for a clean professional look. Do not alter structural elements.",
+  DECLUTTER:
+    "Edit this exact photo of the property. Keep the building architecture, walls, flooring, and room geometry exactly the same. Only enhance: remove temporary clutter, wires, stray items, and clean all surfaces smoothly. Do not change any structural walls or fixtures.",
+  SKY_ENHANCE:
+    "Edit this exact photo of the property. Keep the building architecture, walls, roof, and landscaping exactly the same. Only enhance: replace overcast cloudy sky with a pristine sunny blue sky and soft white clouds. Do not alter any building structures.",
 };
 
 export async function handleEnhanceImage(req: Request): Promise<Response> {
@@ -55,6 +52,8 @@ export async function handleEnhanceImage(req: Request): Promise<Response> {
   const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
   let targetImageId: string | null = null;
+  let activeProviderName = "kobil_llm";
+  let activeModelName = "gemini-2.5-flash-image";
 
   try {
     // 1. Authenticate Caller
@@ -80,7 +79,6 @@ export async function handleEnhanceImage(req: Request): Promise<Response> {
     const originalUrl = payload.originalImageUrl || payload.original_url || payload.file_path || payload.original_image_base64;
     const preset = payload.preset || "HDR_BALANCED";
     const projectId = payload.projectId || payload.project_id || null;
-    const customApiKey = payload.customApiKey;
 
     if (!originalUrl && !rawImageId) {
       return new Response(JSON.stringify({ error: "originalImageUrl or imageId is required" }), {
@@ -111,7 +109,7 @@ export async function handleEnhanceImage(req: Request): Promise<Response> {
       );
     }
 
-    // 3. Upsert / Insert DB record in 'images' table with status = 'queued' then 'processing'
+    // 3. Upsert / Insert DB record in 'images' table with status = 'processing'
     if (rawImageId) {
       targetImageId = rawImageId;
       await supabaseAdmin
@@ -142,64 +140,66 @@ export async function handleEnhanceImage(req: Request): Promise<Response> {
       targetImageId = newImage.id;
     }
 
-    // 4. Resolve Active AI Provider
-    const { data: providerConfig } = await supabaseAdmin
+    // 4. Resolve Active AI Provider Configuration for purpose='image_generation'
+    const { data: providerRows } = await supabaseAdmin
       .from("api_provider_settings")
       .select("*")
-      .eq("is_default", true)
+      .eq("purpose", "image_generation")
+      .eq("is_active", true);
+
+    const activeProvider = providerRows?.[0];
+
+    if (!activeProvider) {
+      throw new Error("Provider AI untuk image generation belum dikonfigurasi. Hubungi admin.");
+    }
+
+    // Check user API key override in user_api_keys
+    const { data: userKeyRow } = await supabaseAdmin
+      .from("user_api_keys")
+      .select("*")
+      .eq("user_id", user.id)
+      .eq("provider_name", activeProvider.provider_name)
       .eq("is_active", true)
-      .single();
+      .maybeSingle();
 
-    const providerName = providerConfig?.provider_name || "lovable";
-    const modelName = providerConfig?.model_name || "google/gemini-2.5-flash-image";
-    const prompt = PRESET_PROMPTS[preset] || PRESET_PROMPTS["HDR_BALANCED"];
+    const apiKey = userKeyRow?.api_key_encrypted || activeProvider.api_key_encrypted || getEnv("GEMINI_API_KEY") || getEnv("OPENAI_API_KEY");
+    if (!apiKey) {
+      throw new Error(`API Key untuk provider '${activeProvider.provider_name}' belum diatur.`);
+    }
 
-    // 5. Call AI Provider
-    const aiApiKey = customApiKey || getEnv("LOVABLE_API_KEY") || getEnv("GEMINI_API_KEY") || getEnv("OPENAI_API_KEY") || "mock-ai-key";
-    let enhancedImageUrl: string = "";
+    activeProviderName = activeProvider.provider_name;
+    activeModelName = activeProvider.model_name || "gemini-2.5-flash-image";
 
-    // If mock/test mode or standard call
-    if (getEnv("MOCK_AI_GATEWAY") === "true" || aiApiKey === "mock-ai-key") {
-      // Mocked high quality response for testing environment
-      enhancedImageUrl = `https://localhost.supabase.co/storage/v1/object/public/images/enhanced/${user.id}/${targetImageId}_enhanced.webp`;
+    // Formulate Relative Edit Prompt Instruction
+    const baseEditPrompt = PRESET_PROMPTS[preset] || PRESET_PROMPTS["HDR_BALANCED"];
+    const editInstruction = preset.includes(" ") || preset.length > 30
+      ? `Edit this exact photo of the property. Keep the building structure, architecture, walls, roof, doors, windows, and camera angle exactly the same. Only enhance: ${preset}. Do not add, remove, or change any structural elements.`
+      : baseEditPrompt;
+
+    // 5. Call Provider Adapter
+    const enhancedBase64OrUrl = await callImageProviderAdapter(
+      activeProvider,
+      apiKey,
+      originalUrl!,
+      editInstruction
+    );
+
+    let enhancedImageUrl = "";
+
+    if (enhancedBase64OrUrl.startsWith("http://") || enhancedBase64OrUrl.startsWith("https://") || enhancedBase64OrUrl.startsWith("data:")) {
+      enhancedImageUrl = enhancedBase64OrUrl;
     } else {
-      const aiResponse = await fetch("https://ai-gateway.lovable.dev/v1/images/generations", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${aiApiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: modelName,
-          prompt: prompt,
-          image_url: originalUrl,
-          response_format: "b64_json",
-          n: 1,
-        }),
-      });
-
-      if (!aiResponse.ok) {
-        const errText = await aiResponse.text();
-        throw new Error(`AI Provider ${providerName} failed: ${aiResponse.status} ${errText}`);
-      }
-
-      const aiData = await aiResponse.json();
-      const base64Data = aiData.data?.[0]?.b64_json || aiData.image_base64;
-      if (!base64Data) {
-        throw new Error("No image data returned from AI provider");
-      }
-
-      const binaryString = atob(base64Data);
-      const enhancedImageBytes = new Uint8Array(binaryString.length);
+      // Decode Base64 and Upload to Storage
+      const binaryString = atob(enhancedBase64OrUrl);
+      const bytes = new Uint8Array(binaryString.length);
       for (let i = 0; i < binaryString.length; i++) {
-        enhancedImageBytes[i] = binaryString.charCodeAt(i);
+        bytes[i] = binaryString.charCodeAt(i);
       }
 
-      // 6. Upload Enhanced Image to Storage
       const storagePath = `enhanced/${user.id}/${targetImageId}_enhanced.webp`;
       const { error: uploadError } = await supabaseAdmin.storage
         .from("images")
-        .upload(storagePath, enhancedImageBytes, {
+        .upload(storagePath, bytes, {
           contentType: "image/webp",
           upsert: true,
         });
@@ -208,13 +208,11 @@ export async function handleEnhanceImage(req: Request): Promise<Response> {
         throw new Error(`Storage upload error: ${uploadError.message}`);
       }
 
-      const { data: publicUrlData } = supabaseAdmin.storage
-        .from("images")
-        .getPublicUrl(storagePath);
+      const { data: publicUrlData } = supabaseAdmin.storage.from("images").getPublicUrl(storagePath);
       enhancedImageUrl = publicUrlData.publicUrl;
     }
 
-    // 7. Update Image status = 'done'
+    // 6. Update Image Record status = 'done'
     const latencyMs = Date.now() - startTime;
     await supabaseAdmin
       .from("images")
@@ -222,8 +220,8 @@ export async function handleEnhanceImage(req: Request): Promise<Response> {
         status: "done",
         enhanced_url: enhancedImageUrl,
         metadata: {
-          provider: providerName,
-          model: modelName,
+          provider: activeProviderName,
+          model: activeModelName,
           preset,
           latency_ms: latencyMs,
         },
@@ -231,12 +229,12 @@ export async function handleEnhanceImage(req: Request): Promise<Response> {
       })
       .eq("id", targetImageId);
 
-    // 8. Log Usage
+    // 7. Log Usage
     await supabaseAdmin.from("api_usage_logs").insert({
       user_id: user.id,
       image_id: targetImageId,
-      provider: providerName,
-      model: modelName,
+      provider: activeProviderName,
+      model: activeModelName,
       latency_ms: latencyMs,
       status: "success",
       cost_estimate_usd: 0.02,
@@ -247,7 +245,6 @@ export async function handleEnhanceImage(req: Request): Promise<Response> {
         success: true,
         imageId: targetImageId,
         enhanced_url: enhancedImageUrl,
-        enhancedImageUrl,
         remainingQuota: quotaResult.remaining_quota,
         cycleResetDate: quotaResult.cycle_reset_date,
       }),
@@ -260,7 +257,7 @@ export async function handleEnhanceImage(req: Request): Promise<Response> {
   } catch (error: any) {
     const latencyMs = Date.now() - startTime;
 
-    // Fail-safe: Update status = 'failed' & Emit Critical Admin Notification
+    // Fail-safe: Update status = 'failed' & Emit Critical Notification
     try {
       if (targetImageId) {
         await supabaseAdmin
@@ -274,16 +271,16 @@ export async function handleEnhanceImage(req: Request): Promise<Response> {
       }
 
       await supabaseAdmin.from("admin_notifications").insert({
-        title: "AI Enhancement Failure",
-        message: `Image enhancement failed: ${error.message}`,
+        title: `AI Enhancement Failure (${activeProviderName})`,
+        message: `Image enhancement failed on ${activeProviderName} (${activeModelName}): ${error.message}`,
         severity: "critical",
-        metadata: { error: error.stack || error.message, latencyMs, imageId: targetImageId },
+        metadata: { provider: activeProviderName, model: activeModelName, error: error.stack || error.message, latencyMs, imageId: targetImageId },
       });
 
       await supabaseAdmin.from("api_usage_logs").insert({
         image_id: targetImageId,
-        provider: "lovable",
-        model: "google/gemini-2.5-flash-image",
+        provider: activeProviderName,
+        model: activeModelName,
         latency_ms: latencyMs,
         status: "failed",
         error_code: error.message,
@@ -301,7 +298,191 @@ export async function handleEnhanceImage(req: Request): Promise<Response> {
   }
 }
 
-// Serve default if in Deno runtime
+// Provider Adapter Implementation
+async function callImageProviderAdapter(
+  config: any,
+  apiKey: string,
+  originalImageUrl: string,
+  editInstruction: string
+): Promise<string> {
+  const providerName = config.provider_name || "kobil_llm";
+
+  switch (providerName) {
+    case "kobil_llm":
+    case "openai_compatible":
+      return await callOpenAICompatibleImageEdit(config, apiKey, originalImageUrl, editInstruction);
+
+    case "gemini_direct":
+      return await callGeminiDirectImageEdit(config, apiKey, originalImageUrl, editInstruction);
+
+    case "openai_direct":
+      return await callOpenAIImageEdit(config, apiKey, originalImageUrl, editInstruction);
+
+    default:
+      throw new Error(`Provider '${providerName}' belum didukung dalam adapter.`);
+  }
+}
+
+// Adapter 1: Kobil LLM Proxy / LiteLLM OpenAI-compatible
+async function callOpenAICompatibleImageEdit(
+  config: any,
+  apiKey: string,
+  originalImageUrl: string,
+  editInstruction: string
+): Promise<string> {
+  const baseUrl = config.base_url || "https://api.koboiillm.com/v1";
+  const model = config.model_name || "gemini-2.5-flash-image";
+
+  const endpoint = baseUrl.endsWith("/") ? `${baseUrl}chat/completions` : `${baseUrl}/chat/completions`;
+
+  const res = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model,
+      messages: [
+        {
+          role: "user",
+          content: [
+            { type: "text", text: editInstruction },
+            { type: "image_url", image_url: { url: originalImageUrl } },
+          ],
+        },
+      ],
+    }),
+  });
+
+  if (!res.ok) {
+    const rawErrorText = await res.text();
+    throw new Error(`Kobil LLM API HTTP ${res.status}: ${rawErrorText.substring(0, 300)}`);
+  }
+
+  const json = await res.json();
+
+  // Defensive Response Parsing: Check in sequence
+  // 1. choices[0].message.images[0].image_url.url or b64_json
+  const msgImage = json.choices?.[0]?.message?.images?.[0];
+  if (msgImage?.image_url?.url || msgImage?.b64_json || msgImage?.url) {
+    return msgImage.image_url?.url || msgImage.b64_json || msgImage.url;
+  }
+
+  // 2. choices[0].message.content if array with image type
+  const msgContent = json.choices?.[0]?.message?.content;
+  if (Array.isArray(msgContent)) {
+    for (const part of msgContent) {
+      if (part.type === "image_url" && part.image_url?.url) return part.image_url.url;
+      if (part.image_base64 || part.b64_json) return part.image_base64 || part.b64_json;
+    }
+  }
+
+  // 3. data[0].b64_json / data[0].url
+  if (json.data?.[0]?.b64_json || json.data?.[0]?.url) {
+    return json.data[0].b64_json || json.data[0].url;
+  }
+
+  // Throw detailed error with raw response snippet for admin notification logging
+  const rawSnippet = JSON.stringify(json).substring(0, 250);
+  throw new Error(`Unrecognized response format from Kobil LLM Proxy: ${rawSnippet}`);
+}
+
+// Adapter 2: Gemini Direct API (generativelanguage.googleapis.com)
+async function callGeminiDirectImageEdit(
+  config: any,
+  apiKey: string,
+  originalImageUrl: string,
+  editInstruction: string
+): Promise<string> {
+  const model = config.model_name || "gemini-2.5-flash-image";
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+
+  // Fetch original image base64 if needed
+  let base64Data = "";
+  if (originalImageUrl.startsWith("data:")) {
+    base64Data = originalImageUrl.split(",")[1];
+  } else {
+    const imgRes = await fetch(originalImageUrl);
+    const buf = await imgRes.arrayBuffer();
+    const bytes = new Uint8Array(buf);
+    let binary = "";
+    for (let i = 0; i < bytes.byteLength; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    base64Data = btoa(binary);
+  }
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      contents: [
+        {
+          parts: [
+            { text: editInstruction },
+            {
+              inline_data: {
+                mime_type: "image/jpeg",
+                data: base64Data,
+              },
+            },
+          ],
+        },
+      ],
+    }),
+  });
+
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`Gemini Direct API HTTP ${res.status}: ${errText.substring(0, 300)}`);
+  }
+
+  const json = await res.json();
+  const inlineImage = json.candidates?.[0]?.content?.parts?.find((p: any) => p.inline_data?.data)?.inline_data?.data;
+
+  if (inlineImage) return inlineImage;
+
+  throw new Error(`Gemini Direct API did not return inline_data image: ${JSON.stringify(json).substring(0, 250)}`);
+}
+
+// Adapter 3: OpenAI Direct API (api.openai.com)
+async function callOpenAIImageEdit(
+  config: any,
+  apiKey: string,
+  originalImageUrl: string,
+  editInstruction: string
+): Promise<string> {
+  const model = config.model_name || "dall-e-3";
+  const url = "https://api.openai.com/v1/images/generations";
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model,
+      prompt: editInstruction,
+      n: 1,
+      response_format: "b64_json",
+    }),
+  });
+
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`OpenAI Direct API HTTP ${res.status}: ${errText.substring(0, 300)}`);
+  }
+
+  const json = await res.json();
+  if (json.data?.[0]?.b64_json || json.data?.[0]?.url) {
+    return json.data[0].b64_json || json.data[0].url;
+  }
+
+  throw new Error(`OpenAI Direct API response error: ${JSON.stringify(json).substring(0, 250)}`);
+}
+
 // @ts-ignore
 if (typeof Deno !== "undefined" && typeof Deno.serve === "function") {
   // @ts-ignore

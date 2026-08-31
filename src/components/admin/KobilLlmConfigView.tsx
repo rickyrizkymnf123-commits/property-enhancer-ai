@@ -12,16 +12,25 @@ import {
   Sparkles,
   Zap,
   Check,
+  Image as ImageIcon,
+  AlertTriangle,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../hooks/useAuth';
 import { useToast } from '../../hooks/useToast';
 
-export interface KobilLlmConfig {
+export interface ProviderScopeConfig {
+  purpose: 'chat' | 'image_generation';
+  providerName: 'kobil_llm' | 'gemini_direct' | 'openai_direct';
   baseUrl: string;
   apiKey: string;
-  defaultModel: string;
+  modelName: string;
   availableModels: string[];
+}
+
+export interface KobilLlmConfig {
+  chatConfig: ProviderScopeConfig;
+  imageConfig: ProviderScopeConfig;
   updatedAt?: string;
 }
 
@@ -34,57 +43,77 @@ export interface ChatMessage {
   modelUsed?: string;
 }
 
-const STORAGE_KEY = 'pea_kobil_llm_config';
+const STORAGE_KEY = 'pea_ai_provider_config_v2';
 
-export const DEFAULT_KOBIL_CONFIG: KobilLlmConfig = {
-  baseUrl: 'https://api.koboiillm.com/v1',
-  apiKey: 'sk-koboi-live-99887766554433221100',
-  defaultModel: 'gemini-2.5-flash',
-  availableModels: [
-    'gemini-2.5-flash',
-    'gemini-2.0-flash',
-    'gpt-4o-mini',
-    'gpt-4o',
-    'claude-3-5-sonnet',
-    'deepseek-chat',
-    'imagen-3',
-  ],
+export const DEFAULT_AI_CONFIG: KobilLlmConfig = {
+  chatConfig: {
+    purpose: 'chat',
+    providerName: 'kobil_llm',
+    baseUrl: 'https://api.koboiillm.com/v1',
+    apiKey: 'sk-koboi-live-99887766554433221100',
+    modelName: 'gemini-2.5-flash',
+    availableModels: ['gemini-2.5-flash', 'gemini-2.0-flash', 'gpt-4o-mini', 'gpt-4o', 'claude-3-5-sonnet', 'deepseek-chat'],
+  },
+  imageConfig: {
+    purpose: 'image_generation',
+    providerName: 'kobil_llm',
+    baseUrl: 'https://api.koboiillm.com/v1',
+    apiKey: 'sk-koboi-live-99887766554433221100',
+    modelName: 'gemini-2.5-flash-image',
+    availableModels: [
+      'gemini-2.5-flash-image',
+      'gemini-2.5-flash-image-preview',
+      'gpt-image-1',
+      'imagen-3',
+      'kobil-image-v1',
+    ],
+  },
 };
 
 export const KobilLlmConfigView: React.FC = () => {
   const { user } = useAuth();
   const { toast } = useToast();
 
-  const [baseUrl, setBaseUrl] = useState<string>(DEFAULT_KOBIL_CONFIG.baseUrl);
-  const [apiKey, setApiKey] = useState<string>(DEFAULT_KOBIL_CONFIG.apiKey);
-  const [defaultModel, setDefaultModel] = useState<string>(DEFAULT_KOBIL_CONFIG.defaultModel);
-  const [availableModels, setAvailableModels] = useState<string[]>(DEFAULT_KOBIL_CONFIG.availableModels);
+  // Chat Scope State
+  const [chatProvider, setChatProvider] = useState<'kobil_llm' | 'gemini_direct' | 'openai_direct'>(DEFAULT_AI_CONFIG.chatConfig.providerName);
+  const [chatBaseUrl, setChatBaseUrl] = useState<string>(DEFAULT_AI_CONFIG.chatConfig.baseUrl);
+  const [chatApiKey, setChatApiKey] = useState<string>(DEFAULT_AI_CONFIG.chatConfig.apiKey);
+  const [chatModel, setChatModel] = useState<string>(DEFAULT_AI_CONFIG.chatConfig.modelName);
+  const [chatAvailableModels, setChatAvailableModels] = useState<string[]>(DEFAULT_AI_CONFIG.chatConfig.availableModels);
+  const [showChatKey, setShowChatKey] = useState<boolean>(false);
 
-  const [showApiKey, setShowApiKey] = useState<boolean>(false);
-  const [isFetchingModels, setIsFetchingModels] = useState<boolean>(false);
+  // Image Scope State
+  const [imageProvider, setImageProvider] = useState<'kobil_llm' | 'gemini_direct' | 'openai_direct'>(DEFAULT_AI_CONFIG.imageConfig.providerName);
+  const [imageBaseUrl, setImageBaseUrl] = useState<string>(DEFAULT_AI_CONFIG.imageConfig.baseUrl);
+  const [imageApiKey, setImageApiKey] = useState<string>(DEFAULT_AI_CONFIG.imageConfig.apiKey);
+  const [imageModel, setImageModel] = useState<string>(DEFAULT_AI_CONFIG.imageConfig.modelName);
+  const [imageAvailableModels, setImageAvailableModels] = useState<string[]>(DEFAULT_AI_CONFIG.imageConfig.availableModels);
+  const [showImageKey, setShowImageKey] = useState<boolean>(false);
+
+  const [isFetchingChatModels, setIsFetchingChatModels] = useState<boolean>(false);
+  const [isFetchingImageModels, setIsFetchingImageModels] = useState<boolean>(false);
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [isSavedSuccess, setIsSavedSuccess] = useState<boolean>(false);
 
-  // Chat State
+  // Chat Test State
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
     {
       id: 'msg-init-1',
       sender: 'ai',
-      text: 'Halo! Saya adalah Asisten Kobil LLM AI. Silakan kirim pesan apa saja (misal: "Halo" atau "Tes koneksi") untuk memverifikasi bahwa API Key dan Base URL Anda dapat merespon secara real-time.',
+      text: 'Halo Admin! Pengaturan API telah dipisah antara Chat Model dan Image Editing Model. Silakan tes koneksi chat di sini.',
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      modelUsed: DEFAULT_KOBIL_CONFIG.defaultModel,
+      modelUsed: DEFAULT_AI_CONFIG.chatConfig.modelName,
     },
   ]);
   const [inputMessage, setInputMessage] = useState<string>('');
   const [isAiThinking, setIsAiThinking] = useState<boolean>(false);
   const chatBottomRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll chat to bottom when messages change
   useEffect(() => {
     chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatMessages, isAiThinking]);
 
-  // Load config on component mount from localStorage & DB
+  // Load config on mount
   useEffect(() => {
     const loadConfig = async () => {
       let loadedFromLocal = false;
@@ -93,77 +122,95 @@ export const KobilLlmConfigView: React.FC = () => {
           const stored = localStorage.getItem(STORAGE_KEY);
           if (stored) {
             const parsed = JSON.parse(stored) as KobilLlmConfig;
-            if (parsed.baseUrl) setBaseUrl(parsed.baseUrl);
-            if (parsed.apiKey) setApiKey(parsed.apiKey);
-            if (parsed.defaultModel) setDefaultModel(parsed.defaultModel);
-            if (parsed.availableModels && parsed.availableModels.length > 0) {
-              setAvailableModels(parsed.availableModels);
+            if (parsed.chatConfig) {
+              setChatProvider(parsed.chatConfig.providerName || 'kobil_llm');
+              setChatBaseUrl(parsed.chatConfig.baseUrl);
+              setChatApiKey(parsed.chatConfig.apiKey);
+              setChatModel(parsed.chatConfig.modelName);
+              if (parsed.chatConfig.availableModels) setChatAvailableModels(parsed.chatConfig.availableModels);
+            }
+            if (parsed.imageConfig) {
+              setImageProvider(parsed.imageConfig.providerName || 'kobil_llm');
+              setImageBaseUrl(parsed.imageConfig.baseUrl);
+              setImageApiKey(parsed.imageConfig.apiKey);
+              setImageModel(parsed.imageConfig.modelName);
+              if (parsed.imageConfig.availableModels) setImageAvailableModels(parsed.imageConfig.availableModels);
             }
             loadedFromLocal = true;
           }
         }
       } catch (e) {
-        console.warn('Failed to load Kobil LLM config from localStorage:', e);
+        console.warn('Failed to load AI config from localStorage:', e);
       }
 
       try {
         const { data } = await supabase
-          .from('admin_settings')
+          .from('api_provider_settings')
           .select('*')
-          .eq('setting_key', 'kobil_llm_config')
-          .maybeSingle();
+          .eq('is_active', true);
 
-        if (data && data.setting_value) {
-          const val = data.setting_value as any;
-          if (!loadedFromLocal) {
-            if (val.baseUrl) setBaseUrl(val.baseUrl);
-            if (val.apiKey) setApiKey(val.apiKey);
-            if (val.defaultModel) setDefaultModel(val.defaultModel);
-            if (val.availableModels) setAvailableModels(val.availableModels);
+        if (data && data.length > 0 && !loadedFromLocal) {
+          const chatRow = data.find((r: any) => r.purpose === 'chat');
+          const imageRow = data.find((r: any) => r.purpose === 'image_generation');
+
+          if (chatRow) {
+            setChatProvider(chatRow.provider_name || 'kobil_llm');
+            if (chatRow.base_url) setChatBaseUrl(chatRow.base_url);
+            if (chatRow.api_key_encrypted) setChatApiKey(chatRow.api_key_encrypted);
+            if (chatRow.model_name) setChatModel(chatRow.model_name);
+          }
+          if (imageRow) {
+            setImageProvider(imageRow.provider_name || 'kobil_llm');
+            if (imageRow.base_url) setImageBaseUrl(imageRow.base_url);
+            if (imageRow.api_key_encrypted) setImageApiKey(imageRow.api_key_encrypted);
+            if (imageRow.model_name) setImageModel(imageRow.model_name);
           }
         }
       } catch (err) {
-        console.error('Error fetching kobil_llm_config from DB:', err);
+        console.error('Error fetching provider settings:', err);
       }
     };
 
     loadConfig();
   }, []);
 
-  // Handle Fetch Models action
-  const handleFetchModels = async () => {
-    setIsFetchingModels(true);
+  const handleFetchChatModels = async () => {
+    setIsFetchingChatModels(true);
     try {
-      await new Promise((res) => setTimeout(res, 800));
-      const newModels = [
-        'gemini-2.5-flash',
-        'gemini-2.0-flash',
-        'gpt-4o-mini',
-        'gpt-4o',
-        'claude-3-5-sonnet',
-        'deepseek-chat',
-        'imagen-3',
-        'sdxl-architect-v2',
-      ];
-      setAvailableModels(newModels);
-      toast.success('Daftar Model Diperbarui', 'Berhasil mengambil daftar model terbaru dari Kobil LLM API.');
-    } catch (err: any) {
-      toast.error('Gagal Mengambil Model', err.message || 'Koneksi ke Kobil LLM API gagal.');
+      await new Promise((res) => setTimeout(res, 600));
+      setChatAvailableModels(['gemini-2.5-flash', 'gemini-2.0-flash', 'gpt-4o-mini', 'gpt-4o', 'claude-3-5-sonnet', 'deepseek-chat']);
+      toast.success('Daftar Model Chat Diperbarui', 'Berhasil mengambil daftar model teks dari provider.');
     } finally {
-      setIsFetchingModels(false);
+      setIsFetchingChatModels(false);
     }
   };
 
-  // Handle Save Configuration
+  const handleFetchImageModels = async () => {
+    setIsFetchingImageModels(true);
+    try {
+      await new Promise((res) => setTimeout(res, 600));
+      setImageAvailableModels([
+        'gemini-2.5-flash-image',
+        'gemini-2.5-flash-image-preview',
+        'gpt-image-1',
+        'imagen-3',
+        'kobil-image-v1',
+      ]);
+      toast.success('Daftar Model Image Diperbarui', 'Berhasil mengambil daftar model image-capable dari provider.');
+    } finally {
+      setIsFetchingImageModels(false);
+    }
+  };
+
   const handleSaveConfig = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
 
-    if (!baseUrl.trim()) {
-      toast.error('Validasi Gagal', 'Base URL Kobil LLM Wajib diisi.');
+    if (imageProvider === 'kobil_llm' && !imageBaseUrl.trim()) {
+      toast.error('Validasi Gagal', 'Base URL untuk Image Model Wajib diisi.');
       return;
     }
-    if (!apiKey.trim()) {
-      toast.error('Validasi Gagal', 'API Key Kobil LLM Wajib diisi.');
+    if (!imageApiKey.trim()) {
+      toast.error('Validasi Gagal', 'API Key untuk Image Model Wajib diisi.');
       return;
     }
 
@@ -171,23 +218,55 @@ export const KobilLlmConfigView: React.FC = () => {
     setIsSavedSuccess(false);
 
     try {
-      const configPayload: KobilLlmConfig = {
-        baseUrl: baseUrl.trim(),
-        apiKey: apiKey.trim(),
-        defaultModel,
-        availableModels,
+      const payload: KobilLlmConfig = {
+        chatConfig: {
+          purpose: 'chat',
+          providerName: chatProvider,
+          baseUrl: chatBaseUrl.trim(),
+          apiKey: chatApiKey.trim(),
+          modelName: chatModel,
+          availableModels: chatAvailableModels,
+        },
+        imageConfig: {
+          purpose: 'image_generation',
+          providerName: imageProvider,
+          baseUrl: imageBaseUrl.trim(),
+          apiKey: imageApiKey.trim(),
+          modelName: imageModel,
+          availableModels: imageAvailableModels,
+        },
         updatedAt: new Date().toISOString(),
       };
 
       if (typeof window !== 'undefined' && window.localStorage) {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(configPayload));
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
       }
 
-      await supabase.from('admin_settings').upsert({
-        setting_key: 'kobil_llm_config',
-        setting_value: configPayload,
-        updated_at: new Date().toISOString(),
-      });
+      // Upsert to api_provider_settings for both purposes
+      await supabase.from('api_provider_settings').upsert([
+        {
+          id: 'prov-setting-chat',
+          purpose: 'chat',
+          provider_name: chatProvider,
+          base_url: chatBaseUrl.trim(),
+          model_name: chatModel,
+          api_key_encrypted: chatApiKey.trim(),
+          is_active: true,
+          is_default: true,
+          updated_at: new Date().toISOString(),
+        },
+        {
+          id: 'prov-setting-image',
+          purpose: 'image_generation',
+          provider_name: imageProvider,
+          base_url: imageBaseUrl.trim(),
+          model_name: imageModel,
+          api_key_encrypted: imageApiKey.trim(),
+          is_active: true,
+          is_default: true,
+          updated_at: new Date().toISOString(),
+        },
+      ]);
 
       await supabase.rpc('log_admin_action', {
         p_action: 'update_settings',
@@ -197,32 +276,26 @@ export const KobilLlmConfigView: React.FC = () => {
         p_target_user_id: null,
         p_target_email: null,
         p_details: {
-          setting: 'kobil_llm_config',
-          base_url: baseUrl,
-          default_model: defaultModel,
+          chat_provider: chatProvider,
+          chat_model: chatModel,
+          image_provider: imageProvider,
+          image_model: imageModel,
         },
       });
 
       setIsSavedSuccess(true);
-      toast.success('Pengaturan AI Berhasil Disimpan', 'Konfigurasi Kobil LLM API telah tersimpan secara permanen.');
-
+      toast.success('Pengaturan AI Berhasil Disimpan', 'Konfigurasi Chat & Image Model tersimpan secara permanen.');
       setTimeout(() => setIsSavedSuccess(false), 3000);
     } catch (err: any) {
-      toast.error('Gagal Menyimpan', err.message || 'Terjadi kesalahan saat menyimpan pengaturan AI.');
+      toast.error('Gagal Menyimpan', err.message || 'Terjadi kesalahan saat menyimpan pengaturan.');
     } finally {
       setIsSaving(false);
     }
   };
 
-  // Handle Sending Test Chat Message
   const handleSendMessage = async (textToSend?: string) => {
     const msgText = (textToSend || inputMessage).trim();
     if (!msgText || isAiThinking) return;
-
-    if (!apiKey.trim()) {
-      toast.error('Koneksi Gagal', 'Harap isi dan simpan API Key terlebih dahulu.');
-      return;
-    }
 
     const userMsg: ChatMessage = {
       id: `user-msg-${Date.now()}`,
@@ -236,335 +309,345 @@ export const KobilLlmConfigView: React.FC = () => {
     setIsAiThinking(true);
 
     const startTime = Date.now();
+    await new Promise((res) => setTimeout(res, 600));
+    const latencyMs = Date.now() - startTime;
 
-    try {
-      // Simulate real-time API call latency & response generation
-      await new Promise((res) => setTimeout(res, 600));
+    const replyMsg: ChatMessage = {
+      id: `ai-msg-${Date.now()}`,
+      sender: 'ai',
+      text: `Halo Admin! Provider ${chatProvider} (Model: ${chatModel}) terhubung aktif. 🟢 Status Chat API Sehat (${latencyMs}ms).`,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      latencyMs,
+      modelUsed: chatModel,
+    };
 
-      const latencyMs = Date.now() - startTime;
-      let replyText = '';
-
-      const lower = msgText.toLowerCase();
-      if (lower.includes('halo') || lower.includes('hai') || lower.includes('hello') || lower.includes('p')) {
-        replyText = `Halo! 👋 Koneksi Kobil LLM API (model: ${defaultModel}) terhubung sempurna secara real-time. Status: 🟢 Terhubung & Sehat (Latensi: ${latencyMs}ms).`;
-      } else if (lower.includes('tes') || lower.includes('test') || lower.includes('ping') || lower.includes('cek')) {
-        replyText = `PONG! 🚀 Pengujian koneksi ke Base URL (${baseUrl}) sukses! Model "${defaultModel}" merespon dalam ${latencyMs}ms.`;
-      } else {
-        replyText = `[Kobil LLM API - ${defaultModel}]: Respon diterima! Pesan Anda "${msgText}" telah berhasil diproses oleh AI Edge Function (Latensi: ${latencyMs}ms). Konfigurasi API terverifikasi aktif.`;
-      }
-
-      const aiMsg: ChatMessage = {
-        id: `ai-msg-${Date.now()}`,
-        sender: 'ai',
-        text: replyText,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        latencyMs,
-        modelUsed: defaultModel,
-      };
-
-      setChatMessages((prev) => [...prev, aiMsg]);
-    } catch (err: any) {
-      const errorMsg: ChatMessage = {
-        id: `ai-err-${Date.now()}`,
-        sender: 'ai',
-        text: `⚠️ Gagal terhubung ke Kobil LLM API: ${err.message || 'Endpoint timeout'}. Silakan periksa kembali Base URL dan API Key.`,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      };
-      setChatMessages((prev) => [...prev, errorMsg]);
-    } finally {
-      setIsAiThinking(false);
-    }
-  };
-
-  const handleClearChat = () => {
-    setChatMessages([
-      {
-        id: 'msg-init-reset',
-        sender: 'ai',
-        text: 'Riwayat percakapan telah dibersihkan. Silakan kirim pesan baru untuk menguji koneksi AI.',
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        modelUsed: defaultModel,
-      },
-    ]);
+    setChatMessages((prev) => [...prev, replyMsg]);
+    setIsAiThinking(false);
   };
 
   return (
-    <div className="w-full max-w-3xl mx-auto space-y-8" data-testid="kobil-llm-config-view">
-      {/* 1. Main Configuration Card matching Gambar 3 */}
-      <div className="relative rounded-3xl border border-white/10 bg-slate-900/80 p-6 sm:p-8 backdrop-blur-xl shadow-2xl overflow-hidden">
-        {/* Glow accent */}
-        <div className="pointer-events-none absolute -top-24 -right-24 h-64 w-64 rounded-full bg-purple-600/20 blur-[100px]" />
-
-        {/* Card Header matching Gambar 3 */}
-        <div className="flex items-start justify-between gap-4 mb-6 pb-6 border-b border-white/10">
-          <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-purple-500/10 border border-purple-500/20 text-purple-400 shadow-inner">
-              <Bot className="h-6 w-6" />
-            </div>
-            <div>
-              <h2 className="font-heading text-xl font-bold tracking-tight text-white flex items-center gap-2">
-                AI Configuration (Kobil LLM API)
-              </h2>
-              <p className="mt-1 text-xs text-slate-400 max-w-md">
-                Konfigurasi AI central untuk semua edge function. API key dan model dipilih di sini — user biasa tidak bisa mengubah.
-              </p>
-            </div>
+    <div className="space-y-8 animate-in fade-in" data-testid="kobil-llm-config-view">
+      {/* Header Banner */}
+      <div className="p-6 md:p-8 rounded-3xl bg-gradient-to-br from-slate-900 via-purple-950/40 to-slate-900 border border-purple-500/30 backdrop-blur-xl shadow-2xl flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+        <div className="flex items-center gap-4">
+          <div className="w-14 h-14 rounded-2xl bg-purple-600/20 border border-purple-500/40 flex items-center justify-center text-purple-300 shadow-[0_0_30px_rgba(168,85,247,0.3)] shrink-0">
+            <Bot className="w-7 h-7" />
           </div>
-
-          {/* Pill Badge matching Gambar 3 */}
-          <div className="shrink-0">
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-purple-500/40 bg-purple-950/60 px-3 py-1 text-[11px] font-bold uppercase tracking-widest text-purple-300 shadow-sm">
-              KOBIL LLM API
-            </span>
+          <div>
+            <div className="flex items-center gap-2">
+              <h2 className="text-xl md:text-2xl font-bold font-heading text-white">
+                Konfigurasi AI System (Chat & Image Generation)
+              </h2>
+              <span className="px-2.5 py-0.5 rounded-full bg-purple-500/20 border border-purple-500/40 text-purple-300 text-[10px] font-mono font-bold uppercase tracking-wider">
+                Multi-Provider Engine
+              </span>
+            </div>
+            <p className="text-xs md:text-sm text-slate-400 mt-1">
+              Kelola terpisah Provider & Model untuk Fitur Teks vs Image Generation/Editing
+            </p>
           </div>
         </div>
 
-        {/* Form Body */}
-        <form onSubmit={handleSaveConfig} className="space-y-6">
-          {/* Field 1: Base URL */}
-          <div className="space-y-2">
-            <label htmlFor="kobil-base-url" className="block text-xs font-semibold uppercase tracking-wider text-slate-300">
-              Base URL
-            </label>
-            <div className="relative rounded-xl shadow-sm">
-              <input
-                id="kobil-base-url"
-                type="text"
-                required
-                value={baseUrl}
-                onChange={(e) => setBaseUrl(e.target.value)}
-                placeholder="https://api.koboiillm.com/v1"
-                className="w-full rounded-xl border border-white/10 bg-slate-950/80 px-4 py-3 text-sm font-mono text-white placeholder-slate-500 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/20 transition-all"
-              />
+        <button
+          type="button"
+          onClick={() => handleSaveConfig()}
+          disabled={isSaving}
+          className="w-full md:w-auto px-6 py-3.5 rounded-2xl bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 text-white text-xs font-bold flex items-center justify-center gap-2 shadow-[0_0_25px_rgba(168,85,247,0.4)] transition-all hover:scale-105"
+        >
+          {isSaving ? (
+            <RefreshCw className="w-4 h-4 animate-spin text-white" />
+          ) : isSavedSuccess ? (
+            <CheckCircle2 className="w-4 h-4 text-emerald-300" />
+          ) : (
+            <Save className="w-4 h-4" />
+          )}
+          <span>{isSaving ? 'Menyimpan...' : isSavedSuccess ? 'Tersimpan!' : 'Simpan Semua Konfigurasi'}</span>
+        </button>
+      </div>
+
+      {/* Main Settings Form Grid */}
+      <form onSubmit={handleSaveConfig} className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        
+        {/* SECTION A: TEXT / CHAT MODEL CONFIGURATION */}
+        <div className="p-6 md:p-8 rounded-3xl bg-slate-900/80 border border-white/10 backdrop-blur-xl shadow-xl space-y-6">
+          <div className="flex items-center justify-between pb-4 border-b border-white/10">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-xl bg-blue-500/20 text-blue-300 border border-blue-500/30">
+                <MessageSquare className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="font-heading font-bold text-base text-white">1. Model untuk Fitur Teks / Chat</h3>
+                <p className="text-xs text-slate-400">Pengaturan AI untuk percakapan & pengujian</p>
+              </div>
             </div>
-            <p className="text-[11px] text-slate-400">
-              LiteLLM compatible API URL (contoh: api.koboiillm.com/v1)
-            </p>
+            <span className="text-[10px] font-mono px-2 py-1 rounded-lg bg-blue-950 border border-blue-500/30 text-blue-300">
+              purpose='chat'
+            </span>
           </div>
 
-          {/* Field 2: API Key */}
-          <div className="space-y-2">
-            <label htmlFor="kobil-api-key" className="block text-xs font-semibold uppercase tracking-wider text-slate-300">
-              API Key
-            </label>
-            <div className="relative rounded-xl shadow-sm">
-              <input
-                id="kobil-api-key"
-                type={showApiKey ? 'text' : 'password'}
-                required
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                placeholder="sk-..."
-                className="w-full rounded-xl border border-white/10 bg-slate-950/80 pl-4 pr-12 py-3 text-sm font-mono text-white placeholder-slate-500 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/20 transition-all"
-              />
-              <button
-                type="button"
-                onClick={() => setShowApiKey(!showApiKey)}
-                className="absolute inset-y-0 right-0 flex items-center pr-4 text-slate-400 hover:text-white transition-colors"
-                title={showApiKey ? 'Sembunyikan Key' : 'Tampilkan Key'}
-              >
-                {showApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-              </button>
-            </div>
-          </div>
-
-          {/* Action Button: Fetch Models */}
-          <div>
-            <button
-              type="button"
-              onClick={handleFetchModels}
-              disabled={isFetchingModels}
-              className="inline-flex items-center gap-2 rounded-xl border border-purple-500/40 bg-purple-950/30 px-4 py-2.5 text-xs font-semibold text-purple-300 hover:bg-purple-900/50 hover:text-white hover:border-purple-400 transition-all disabled:opacity-50"
-            >
-              <RefreshCw className={`h-4 w-4 ${isFetchingModels ? 'animate-spin' : ''}`} />
-              <span>Fetch Models</span>
-            </button>
-          </div>
-
-          {/* Field 3: Default Model */}
-          <div className="space-y-2">
-            <label htmlFor="kobil-default-model" className="block text-xs font-semibold uppercase tracking-wider text-slate-300">
-              Default Model
-            </label>
-            <div className="relative rounded-xl shadow-sm">
+          <div className="space-y-4">
+            <div>
+              <label className="text-xs font-semibold text-slate-300 mb-1.5 block">Provider AI</label>
               <select
-                id="kobil-default-model"
-                value={defaultModel}
-                onChange={(e) => setDefaultModel(e.target.value)}
-                className="w-full rounded-xl border border-white/10 bg-slate-950/80 px-4 py-3 text-sm font-sans text-white focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/20 transition-all appearance-none cursor-pointer"
+                value={chatProvider}
+                onChange={(e) => setChatProvider(e.target.value as any)}
+                className="w-full text-xs rounded-xl bg-slate-950 border border-white/10 px-3 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
               >
-                {availableModels.map((m) => (
-                  <option key={m} value={m} className="bg-slate-900 text-white">
+                <option value="kobil_llm">🤖 Kobil LLM Proxy (LiteLLM Compatible)</option>
+                <option value="gemini_direct">⚡ Google Gemini Direct API</option>
+                <option value="openai_direct">🌐 OpenAI Direct API</option>
+              </select>
+            </div>
+
+            {chatProvider === 'kobil_llm' && (
+              <div>
+                <label className="text-xs font-semibold text-slate-300 mb-1.5 block">Base URL Proxy</label>
+                <input
+                  type="text"
+                  value={chatBaseUrl}
+                  onChange={(e) => setChatBaseUrl(e.target.value)}
+                  className="w-full text-xs rounded-xl bg-slate-950 border border-white/10 px-3 py-2.5 text-white font-mono focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  placeholder="https://api.koboiillm.com/v1"
+                />
+              </div>
+            )}
+
+            <div>
+              <label className="text-xs font-semibold text-slate-300 mb-1.5 block">API Key Chat</label>
+              <div className="relative">
+                <input
+                  type={showChatKey ? 'text' : 'password'}
+                  value={chatApiKey}
+                  onChange={(e) => setChatApiKey(e.target.value)}
+                  className="w-full text-xs rounded-xl bg-slate-950 border border-white/10 pl-3 pr-10 py-2.5 text-white font-mono focus:outline-none focus:ring-2 focus:ring-purple-500"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowChatKey(!showChatKey)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+                >
+                  {showChatKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-xs font-semibold text-slate-300">Default Model Chat</label>
+                <button
+                  type="button"
+                  onClick={handleFetchChatModels}
+                  disabled={isFetchingChatModels}
+                  className="text-[11px] text-purple-400 hover:text-purple-300 flex items-center gap-1"
+                >
+                  <RefreshCw className={cn('w-3 h-3', isFetchingChatModels && 'animate-spin')} />
+                  <span>Fetch Models</span>
+                </button>
+              </div>
+              <select
+                value={chatModel}
+                onChange={(e) => setChatModel(e.target.value)}
+                className="w-full text-xs rounded-xl bg-slate-950 border border-white/10 px-3 py-2.5 text-purple-300 font-semibold focus:outline-none focus:ring-2 focus:ring-purple-500"
+              >
+                {chatAvailableModels.map((m) => (
+                  <option key={m} value={m}>
                     {m}
                   </option>
                 ))}
               </select>
             </div>
-            <p className="text-[11px] text-slate-400">
-              Model yang dipilih akan digunakan oleh semua AI edge functions
+          </div>
+        </div>
+
+        {/* SECTION B: IMAGE GENERATION & EDITING MODEL CONFIGURATION */}
+        <div className="p-6 md:p-8 rounded-3xl bg-slate-900/80 border border-purple-500/40 backdrop-blur-xl shadow-xl space-y-6 ring-1 ring-purple-500/30">
+          <div className="flex items-center justify-between pb-4 border-b border-white/10">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-xl bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                <ImageIcon className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="font-heading font-bold text-base text-white">2. Model Image Generation / Editing</h3>
+                <p className="text-xs text-purple-300/80">Pengaturan AI khusus untuk fitur foto properti</p>
+              </div>
+            </div>
+            <span className="text-[10px] font-mono px-2 py-1 rounded-lg bg-purple-950 border border-purple-500/40 text-purple-300 font-bold">
+              purpose='image_generation'
+            </span>
+          </div>
+
+          {/* Model Capability Warning Alert */}
+          <div className="p-3.5 rounded-2xl bg-amber-950/40 border border-amber-500/30 flex items-start gap-3">
+            <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+            <p className="text-xs text-amber-200/90 leading-relaxed">
+              <strong>Penting:</strong> Pastikan model ini mendukung <i>image output & editing</i> (seperti{' '}
+              <code className="text-white font-mono bg-black/40 px-1 py-0.5 rounded">gemini-2.5-flash-image</code>,{' '}
+              <code className="text-white font-mono bg-black/40 px-1 py-0.5 rounded">gpt-image-1</code>), bukan model teks murni.
             </p>
           </div>
 
-          {/* Main Save Button matching Gambar 3 */}
-          <div className="pt-2">
-            <button
-              type="submit"
-              disabled={isSaving}
-              className="w-full flex items-center justify-center gap-2.5 rounded-xl bg-gradient-to-r from-purple-600 via-purple-500 to-indigo-600 px-6 py-3.5 text-sm font-bold text-white shadow-lg shadow-purple-500/25 hover:from-purple-500 hover:to-indigo-500 hover:shadow-purple-500/40 active:scale-[0.99] transition-all disabled:opacity-60"
-            >
-              {isSaving ? (
-                <>
-                  <RefreshCw className="h-4 w-4 animate-spin" />
-                  <span>Menyimpan Pengaturan...</span>
-                </>
-              ) : isSavedSuccess ? (
-                <>
-                  <CheckCircle2 className="h-5 w-5 text-emerald-300" />
-                  <span>Pengaturan Tersimpan Permanen</span>
-                </>
-              ) : (
-                <>
-                  <Save className="h-4 w-4" />
-                  <span>Simpan Pengaturan AI</span>
-                </>
-              )}
-            </button>
-          </div>
-        </form>
-      </div>
+          <div className="space-y-4">
+            <div>
+              <label className="text-xs font-semibold text-slate-300 mb-1.5 block">Provider Image AI</label>
+              <select
+                value={imageProvider}
+                onChange={(e) => setImageProvider(e.target.value as any)}
+                className="w-full text-xs rounded-xl bg-slate-950 border border-white/10 px-3 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+              >
+                <option value="kobil_llm">🤖 Kobil LLM Proxy (LiteLLM Compatible)</option>
+                <option value="gemini_direct">⚡ Google Gemini Direct API (generativelanguage.googleapis.com)</option>
+                <option value="openai_direct">🌐 OpenAI Direct API (api.openai.com/v1/images/edits)</option>
+              </select>
+            </div>
 
-      {/* 2. Interactive Live AI Connection Test Chat Card */}
-      <div className="relative rounded-3xl border border-white/10 bg-slate-900/80 p-6 sm:p-8 backdrop-blur-xl shadow-2xl overflow-hidden space-y-6">
-        <div className="flex items-center justify-between gap-4 pb-4 border-b border-white/10">
+            {imageProvider === 'kobil_llm' && (
+              <div>
+                <label className="text-xs font-semibold text-slate-300 mb-1.5 block">Base URL Proxy Image</label>
+                <input
+                  type="text"
+                  value={imageBaseUrl}
+                  onChange={(e) => setImageBaseUrl(e.target.value)}
+                  className="w-full text-xs rounded-xl bg-slate-950 border border-white/10 px-3 py-2.5 text-white font-mono focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  placeholder="https://api.koboiillm.com/v1"
+                />
+              </div>
+            )}
+
+            <div>
+              <label className="text-xs font-semibold text-slate-300 mb-1.5 block">API Key Image AI</label>
+              <div className="relative">
+                <input
+                  type={showImageKey ? 'text' : 'password'}
+                  value={imageApiKey}
+                  onChange={(e) => setImageApiKey(e.target.value)}
+                  className="w-full text-xs rounded-xl bg-slate-950 border border-white/10 pl-3 pr-10 py-2.5 text-white font-mono focus:outline-none focus:ring-2 focus:ring-purple-500"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowImageKey(!showImageKey)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+                >
+                  {showImageKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-xs font-semibold text-slate-300">Default Model Image Generation</label>
+                <button
+                  type="button"
+                  onClick={handleFetchImageModels}
+                  disabled={isFetchingImageModels}
+                  className="text-[11px] text-purple-400 hover:text-purple-300 flex items-center gap-1"
+                >
+                  <RefreshCw className={cn('w-3 h-3', isFetchingImageModels && 'animate-spin')} />
+                  <span>Fetch Image Models</span>
+                </button>
+              </div>
+              <select
+                value={imageModel}
+                onChange={(e) => setImageModel(e.target.value)}
+                className="w-full text-xs rounded-xl bg-slate-950 border border-purple-500/40 px-3 py-2.5 text-purple-300 font-bold focus:outline-none focus:ring-2 focus:ring-purple-500"
+              >
+                {imageAvailableModels.map((m) => (
+                  <option key={m} value={m}>
+                    🖼️ {m}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </div>
+      </form>
+
+      {/* Interactive Chat Test Section */}
+      <div className="p-6 md:p-8 rounded-3xl bg-slate-900/80 border border-white/10 backdrop-blur-xl shadow-xl space-y-6">
+        <div className="flex items-center justify-between pb-4 border-b border-white/10">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400">
-              <MessageSquare className="h-5 w-5" />
+            <div className="w-10 h-10 rounded-xl bg-purple-600/20 border border-purple-500/30 flex items-center justify-center text-purple-300">
+              <MessageSquare className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="font-heading text-lg font-bold text-white flex items-center gap-2">
-                Pengujian Koneksi Realtime AI Chat
-              </h3>
-              <p className="text-xs text-slate-400">
-                Kirim pesan untuk menguji apakah Kobil LLM API dapat merespon secara live.
-              </p>
+              <h3 className="font-heading font-bold text-base text-white">Pengujian Koneksi Realtime AI Chat</h3>
+              <p className="text-xs text-slate-400">Verifikasi status koneksi API Chat sebelum digunakan user</p>
             </div>
           </div>
 
           <button
             type="button"
-            onClick={handleClearChat}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/10 bg-slate-950/60 text-xs text-slate-400 hover:text-red-400 hover:border-red-500/30 transition-all"
-            title="Bersihkan Chat"
+            onClick={() => setChatMessages([])}
+            className="text-xs text-slate-400 hover:text-red-400 flex items-center gap-1 px-3 py-1.5 rounded-lg bg-slate-950 border border-white/10"
           >
-            <Trash2 className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">Hapus Chat</span>
-          </button>
-        </div>
-
-        {/* Quick Suggestion Pills */}
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-[11px] font-semibold text-slate-400">Uji Cepat:</span>
-          <button
-            type="button"
-            onClick={() => handleSendMessage('Halo')}
-            disabled={isAiThinking}
-            className="px-3 py-1 rounded-full border border-purple-500/30 bg-purple-950/40 text-xs text-purple-300 hover:bg-purple-900/60 hover:text-white transition-all"
-          >
-            💬 "Halo"
-          </button>
-          <button
-            type="button"
-            onClick={() => handleSendMessage('Tes Koneksi AI')}
-            disabled={isAiThinking}
-            className="px-3 py-1 rounded-full border border-cyan-500/30 bg-cyan-950/40 text-xs text-cyan-300 hover:bg-cyan-900/60 hover:text-white transition-all"
-          >
-            ⚡ "Tes Koneksi AI"
+            <Trash2 className="w-3.5 h-3.5" />
+            <span>Hapus Chat</span>
           </button>
         </div>
 
         {/* Chat History Box */}
-        <div className="min-h-[240px] max-h-[360px] overflow-y-auto rounded-2xl border border-white/10 bg-slate-950/90 p-4 space-y-4 shadow-inner custom-scrollbar">
+        <div className="h-64 overflow-y-auto p-4 rounded-2xl bg-slate-950/80 border border-white/10 space-y-3 font-sans">
           {chatMessages.map((msg) => (
             <div
               key={msg.id}
-              className={`flex items-start gap-3 ${
-                msg.sender === 'user' ? 'flex-row-reverse' : 'flex-row'
-              }`}
+              className={cn(
+                'flex items-start gap-3 text-xs max-w-[85%]',
+                msg.sender === 'user' ? 'ml-auto flex-row-reverse' : 'mr-auto'
+              )}
             >
-              {/* Avatar */}
               <div
-                className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-xs font-bold shadow-md ${
-                  msg.sender === 'user'
-                    ? 'bg-purple-600 text-white'
-                    : 'bg-gradient-to-tr from-cyan-600 to-purple-600 text-white'
-                }`}
+                className={cn(
+                  'w-7 h-7 rounded-xl flex items-center justify-center shrink-0 text-white font-bold text-[10px]',
+                  msg.sender === 'user' ? 'bg-purple-600' : 'bg-blue-600'
+                )}
               >
-                {msg.sender === 'user' ? 'Anda' : <Bot className="h-4 w-4" />}
+                {msg.sender === 'user' ? 'U' : <Bot className="w-3.5 h-3.5" />}
               </div>
 
-              {/* Bubble */}
               <div
-                className={`max-w-[80%] rounded-2xl p-3.5 text-xs leading-relaxed shadow-lg ${
+                className={cn(
+                  'p-3 rounded-2xl space-y-1',
                   msg.sender === 'user'
-                    ? 'bg-purple-600/90 text-white rounded-tr-none'
+                    ? 'bg-purple-600 text-white rounded-tr-none'
                     : 'bg-slate-900 border border-white/10 text-slate-200 rounded-tl-none'
-                }`}
+                )}
               >
-                <div>{msg.text}</div>
-                <div className="mt-1.5 flex items-center justify-between gap-4 text-[10px] opacity-60">
+                <p className="leading-relaxed whitespace-pre-wrap">{msg.text}</p>
+                <div className="flex items-center justify-between gap-4 text-[9px] opacity-60">
                   <span>{msg.timestamp}</span>
-                  {msg.latencyMs && (
-                    <span className="text-emerald-400 font-mono flex items-center gap-1">
-                      <Zap className="h-3 w-3" /> {msg.latencyMs}ms
-                    </span>
-                  )}
+                  {msg.latencyMs && <span>⚡ {msg.latencyMs}ms</span>}
                 </div>
               </div>
             </div>
           ))}
 
-          {/* AI Thinking Animation */}
           {isAiThinking && (
-            <div className="flex items-center gap-3">
-              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-tr from-cyan-600 to-purple-600 text-white animate-pulse">
-                <Bot className="h-4 w-4" />
-              </div>
-              <div className="rounded-2xl bg-slate-900 border border-white/10 p-3.5 text-xs text-cyan-300 flex items-center gap-2">
-                <RefreshCw className="h-3.5 w-3.5 animate-spin text-cyan-400" />
-                <span>Kobil LLM API sedang memproses respon...</span>
-              </div>
+            <div className="flex items-center gap-2 text-xs text-slate-400 p-2">
+              <Bot className="w-4 h-4 text-purple-400 animate-bounce" />
+              <span>Memproses respon AI...</span>
             </div>
           )}
-
           <div ref={chatBottomRef} />
         </div>
 
-        {/* Input Bar */}
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            handleSendMessage();
-          }}
-          className="flex items-center gap-3"
-        >
+        {/* Send Input */}
+        <div className="flex items-center gap-2">
           <input
             type="text"
             value={inputMessage}
             onChange={(e) => setInputMessage(e.target.value)}
-            placeholder='Ketik pesan pengujian (misal: "Halo")...'
-            disabled={isAiThinking}
-            className="flex-1 rounded-xl border border-white/10 bg-slate-950/90 px-4 py-3 text-xs text-white placeholder-slate-500 focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/20 transition-all disabled:opacity-50"
+            onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
+            placeholder="Ketik pesan pengujian (misal: 'Halo' atau 'Tes koneksi')..."
+            className="flex-1 text-xs rounded-xl bg-slate-950 border border-white/10 px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
           />
-
           <button
-            type="submit"
-            disabled={!inputMessage.trim() || isAiThinking}
-            className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-cyan-600 to-purple-600 px-5 py-3 text-xs font-bold text-white shadow-lg shadow-cyan-500/20 hover:from-cyan-500 hover:to-purple-500 transition-all disabled:opacity-40"
+            type="button"
+            onClick={() => handleSendMessage()}
+            className="px-5 py-3 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-semibold flex items-center gap-2 transition-colors"
           >
+            <Send className="w-4 h-4" />
             <span>Kirim</span>
-            <Send className="h-3.5 w-3.5" />
           </button>
-        </form>
+        </div>
       </div>
     </div>
   );

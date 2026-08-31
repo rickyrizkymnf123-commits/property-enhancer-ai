@@ -1012,7 +1012,21 @@ export class MockFunctionsClient {
     mockDb.images.set(imageId, { ...newImage });
     realtimeMultiplexer.emit('images', 'UPDATE', { ...newImage });
 
-    // 3. AI Gateway Dispatch Simulation
+    // 3. Resolve Provider Config for purpose='image_generation'
+    let imageProviderSetting = Array.from(mockDb.api_provider_settings.values()).find(
+      (p) => p.purpose === 'image_generation' && (p.is_active || p.is_default)
+    );
+
+    if (!imageProviderSetting) {
+      imageProviderSetting = Array.from(mockDb.api_provider_settings.values()).find(
+        (p) => (p as any).is_default || (p as any).is_enabled
+      );
+    }
+
+    const providerName = imageProviderSetting?.provider_name || 'kobil_llm';
+    const modelName = imageProviderSetting?.model_name || 'gemini-2.5-flash-image';
+
+    // AI Provider Error Simulation if flagged
     if (mockDb.aiProviderShouldFail) {
       newImage.status = 'failed';
       newImage.error_message = mockDb.aiProviderErrorMessage;
@@ -1024,11 +1038,11 @@ export class MockFunctionsClient {
       const notifId = `notif-${Date.now()}`;
       mockDb.admin_notifications.set(notifId, {
         id: notifId,
-        title: 'AI Provider Failure',
+        title: `AI Provider Failure (${providerName})`,
         message: `Failed to enhance image ${imageId}: ${mockDb.aiProviderErrorMessage}`,
         severity: 'critical',
         is_read: false,
-        metadata: { image_id: imageId, user_id: userId, preset },
+        metadata: { image_id: imageId, user_id: userId, preset, provider: providerName, model: modelName },
         created_at: new Date().toISOString(),
       });
 
@@ -1038,8 +1052,8 @@ export class MockFunctionsClient {
         id: usageId,
         user_id: userId,
         image_id: imageId,
-        provider: 'lovable',
-        model: 'google/gemini-2.5-flash-image',
+        provider: providerName,
+        model: modelName,
         duration_ms: 1240,
         status: 'failed',
         error_details: mockDb.aiProviderErrorMessage,
@@ -1053,9 +1067,14 @@ export class MockFunctionsClient {
     }
 
     // 4. Success -> 'done'
-    const enhancedResultUrl = body.enhanced_data_url || body.original_url || `images/${userId}/enhanced_${imageId}.png`;
+    const enhancedResultUrl = body.original_url || `images/${userId}/enhanced_${imageId}.webp`;
     newImage.status = 'done';
     newImage.enhanced_url = enhancedResultUrl;
+    newImage.metadata = {
+      provider: providerName,
+      model: modelName,
+      preset,
+    };
     newImage.updated_at = new Date().toISOString();
     mockDb.images.set(imageId, { ...newImage });
     realtimeMultiplexer.emit('images', 'UPDATE', { ...newImage });
@@ -1066,8 +1085,8 @@ export class MockFunctionsClient {
       id: usageId,
       user_id: userId,
       image_id: imageId,
-      provider: 'kobil_llm',
-      model: 'gemini-2.5-flash',
+      provider: providerName,
+      model: modelName,
       duration_ms: 850,
       status: 'success',
       error_details: null,

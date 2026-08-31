@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from './useAuth';
 import type { ImageRecord, ImageStatus } from '../types/database.types';
-import { transformImageWithPrompt } from '../lib/aiImageTransformer';
 
 export interface EnhancementOptions {
   file?: File | Blob;
@@ -58,11 +57,9 @@ export function useRealtimeEnhancement(): UseRealtimeEnhancementReturn {
           const newRecord = payload.new as ImageRecord;
           if (!newRecord) return;
 
-          // If this update matches our current active image or if we are actively waiting
           if (activeImageIdRef.current && newRecord.id === activeImageIdRef.current) {
             syncImageRecord(newRecord);
           } else if (status === 'queued' || status === 'processing') {
-            // Also accept if current active ID is not set yet but belongs to user
             activeImageIdRef.current = newRecord.id;
             syncImageRecord(newRecord);
           }
@@ -111,8 +108,7 @@ export function useRealtimeEnhancement(): UseRealtimeEnhancementReturn {
 
         const { data: publicUrlData } = supabase.storage.from('images').getPublicUrl(filePath);
         finalOriginalUrl = publicUrlData?.publicUrl || filePath;
-        
-        // Use local object URL for instant crisp display
+
         if (typeof window !== 'undefined' && window.URL) {
           const localUrl = URL.createObjectURL(file);
           setOriginalUrl(localUrl);
@@ -121,43 +117,27 @@ export function useRealtimeEnhancement(): UseRealtimeEnhancementReturn {
         }
       }
 
-      // 2. Transition to queued & processing status loop
-      setStatus('queued');
-      await new Promise((res) => setTimeout(res, 700));
-
       setStatus('processing');
-      await new Promise((res) => setTimeout(res, 1200));
 
-      // 3. Generate Real AI Visual Img2Img Transformation with prompt elements (Night, Fence, Canopy)
-      let transformedDataUrl = '';
-      try {
-        transformedDataUrl = await transformImageWithPrompt({
-          imageSource: file || finalOriginalUrl,
-          prompt: preset,
-        });
-      } catch (transformErr) {
-        console.warn('AI transformation warning:', transformErr);
-      }
-
-      // 4. Invoke `enhance-image` Edge Function & admin config check
+      // 2. Invoke `enhance-image` Edge Function
       const { data, error } = await supabase.functions.invoke('enhance-image', {
         body: {
           preset,
           project_id: projectId,
           file_path: finalOriginalUrl,
           original_url: finalOriginalUrl,
-          enhanced_data_url: transformedDataUrl,
         },
         headers: {
           Authorization: `Bearer ${user.id}`,
         },
       });
 
-      if (error) {
+      if (error || data?.error) {
         setStatus('failed');
         const errMsg =
-          error.message ||
-          (error.code === 'QUOTA_EXHAUSTED'
+          data?.error ||
+          error?.message ||
+          (error?.code === 'QUOTA_EXHAUSTED'
             ? 'Kuota bulanan Anda telah habis'
             : 'Terjadi kesalahan pada AI processing');
         setErrorMessage(errMsg);
@@ -168,12 +148,12 @@ export function useRealtimeEnhancement(): UseRealtimeEnhancementReturn {
         activeImageIdRef.current = data.image_id;
       }
 
-      await new Promise((res) => setTimeout(res, 800));
-
-      const finalEnhancedUrl = transformedDataUrl || data?.enhanced_url;
-      setStatus('done');
-      if (finalEnhancedUrl) {
-        setEnhancedUrl(finalEnhancedUrl);
+      if (data?.status === 'done' && data?.enhanced_url) {
+        setStatus('done');
+        setEnhancedUrl(data.enhanced_url);
+      } else if (data?.status === 'failed') {
+        setStatus('failed');
+        setErrorMessage(data.error || 'Pengolahan AI gagal');
       }
 
       return { success: true, data };
