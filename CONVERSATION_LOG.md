@@ -101,6 +101,11 @@
    - **High-Contrast Night Sky & Architectural Overlays**: Upgraded `src/lib/aiImageEnhancer.ts` with deep midnight blue sky gradients (`rgba(4, 9, 26, 0.88)`), full-image night mood contrast filters, warm golden radial window glows (`rgba(255, 190, 60, 0.65)`), front perimeter fence overlays, and carport canopy structures.
    - **Verified Build & Tests**: 100% test pass rate across 369 tests and clean production build (`built in 2.38s`). Committed and pushed to GitHub commit `a5b5235`.
 
+19. **Enforce 100% Pure Kobil LLM Real AI Execution (Complete Canvas Fallback Removal)**:
+   - **Canvas Fallback Removal**: Completely removed client-side canvas fallback (`generateEnhancedImageDataUrl`) from `KobilLlmConfigView.tsx` and `mockSupabase.ts` so that no fake orange/yellow canvas overlay is ever added.
+   - **Pure Kobil LLM AI Output**: Results are rendered strictly when Kobil LLM AI API returns a valid generated Base64 or Data URL image. If the upstream server returns no image, the system displays a clear, raw error notification detailing the exact missing image status.
+   - **Verified Build & Tests**: 100% test pass rate across 369 tests and clean production build (`built in 2.34s`). Committed and pushed to GitHub commit `12a4dde`.
+
 14. **Investigation of Error Guard & Result View Suppression in AI Studio & Editor (Explorer 1)**:
    - Investigated `EditorPage.tsx`, `useRealtimeEnhancement.ts`, `KobilLlmConfigView.tsx`, `BeforeAfterSlider.tsx`, `mockSupabase.ts`, and `supabase/functions/enhance-image/index.ts`.
    - Identified critical fixes:
