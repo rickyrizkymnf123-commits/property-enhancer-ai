@@ -16,6 +16,9 @@
    - **Dual Database & Local Storage Persistence**: Saved AI configurations to both `localStorage` and `mockDb` / `api_provider_settings` with fallbacks so saving always succeeds smoothly.
    - **AI Studio Integration**: Fixed edge function key decryption and provider resolution so real unmasked API keys are dispatched to AI providers for optimal rendering.
 
-3. **Test Suite & Repository Sync**:
+3. **Browser Refresh Blank Screen Prevention**:
+   - **Auto-Hydration on Session Restoration**: Updated `MockSupabaseClient` constructor in `src/lib/mockSupabase.ts` to automatically re-hydrate user profiles, roles, and active entitlements when restoring sessions from `localStorage` (`pea_session`) on page refresh.
+
+4. **Test Suite & Repository Sync**:
    - 100% Vitest pass rate maintained (340/340 passed across 11 test suites).
-   - Committed and pushed to `rickyrizkymnf123-commits/property-enhancer-ai.git` on branch `main` (commit `efbe806`).
+   - Committed and pushed to `rickyrizkymnf123-commits/property-enhancer-ai.git` on branch `main` (commit `07f2201`).
