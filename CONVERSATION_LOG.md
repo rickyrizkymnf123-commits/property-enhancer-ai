@@ -62,3 +62,9 @@
    - **Dedicated Admin Test Panel**: Added `"Pengujian Realtime AI Studio (Image Generation)"` section in `KobilLlmConfigView.tsx` right next to the Chat Test section.
    - **Real-Time Verification**: Admin can upload or select sample property photos, write prompt instructions, trigger `enhance-image` processing, measure real HTTP latency in ms, stream usage logs to `api_usage_logs`, and view before/after slider results in real time.
    - **Verified Build & Tests**: 100% test pass rate (340/340) and clean production build (`built in 2.38s`). Committed and pushed to GitHub commit `c8229ef`.
+
+12. **Simplified Single-Path Kobil LLM Image Editing Implementation**:
+   - **Plaintext API Key Storage**: Temporarily reads and stores API keys in plaintext (`api_key_encrypted`) without masking/decryption overhead to eliminate decryption failure as a diagnosis variable.
+   - **Direct Kobil LLM `POST /chat/completions` Path**: Edge function `enhance-image` and `mockSupabase.ts` route directly to `https://api.koboillm.com/v1/chat/completions` with `{ type: 'image_url', image_url: { url: base64DataUrl } }` and user free-text prompt ("tambahkan pagar putih dan kanopi...").
+   - **Raw Error Transparency**: Raw HTTP responses and JSON structures are reported directly in UI Toast and Red Alert Banners without generic fallback wrappers.
+   - **Verified Build & Tests**: 100% test pass rate (340/340) and clean production build (`built in 2.33s`). Committed and pushed to GitHub commit `0ba2a58`.
