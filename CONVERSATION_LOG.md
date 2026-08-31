@@ -52,3 +52,8 @@
    - **Removed Extra Prefix Text**: Stripped `[Image Capable]` and emoji prefixes (`🖼️`, `🤖`) from option tags in `KobilLlmConfigView.tsx` select dropdowns.
    - **Sanitized Saved Model Names**: Added `cleanModelName` sanitizer in `loadConfig` and `handleSaveConfig` to ensure saved model strings match exact model IDs (e.g. `gemini-2.5-flash-image`) without extra text.
    - **Verified Build & Tests**: 100% test pass rate (340/340) and clean production build (`built in 2.33s`). Committed and pushed to GitHub commit `a165953`.
+
+10. **Exact User API Key Retention Across Page Refresh**:
+   - **Mock DB Storage Hydration**: Added auto-hydration in `mockDb.seedDefaults()` (`src/lib/mockSupabase.ts`) to read user-saved API keys from `localStorage` (`pea_ai_provider_config_v4`) upon browser refresh.
+   - **Prevented Seed Overwrite**: Prevented initial default seed key (`sk-koboi-live-99887766554433221100`) from overwriting custom keys saved by Admin (`sk-h7LuYKHnA0cvX3BvjoHQEQ`) on refresh.
+   - **Verified Build & Tests**: 100% test pass rate (340/340) and clean production build (`built in 2.34s`). Committed and pushed to GitHub commit `3f17233`.
