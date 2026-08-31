@@ -23,6 +23,13 @@ import { clsx as cn } from 'clsx';
 import { BeforeAfterSlider } from '../studio/BeforeAfterSlider';
 import { generateEnhancedImageDataUrl } from '../../lib/aiImageEnhancer';
 
+export interface TestLogEntry {
+  timestamp: string;
+  type: 'info' | 'request' | 'response' | 'error' | 'success';
+  message: string;
+  details?: string;
+}
+
 export interface ProviderScopeConfig {
   purpose: 'chat' | 'image_generation';
   providerName: 'kobil_llm' | 'gemini_direct' | 'openai_direct';
@@ -117,6 +124,18 @@ export const KobilLlmConfigView: React.FC = () => {
   const [isTestingImage, setIsTestingImage] = useState<boolean>(false);
   const [imageTestError, setImageTestError] = useState<string | null>(null);
   const [imageTestLatency, setImageTestLatency] = useState<number | null>(null);
+  const [imageTestLogs, setImageTestLogs] = useState<TestLogEntry[]>([]);
+  const [showLogs, setShowLogs] = useState<boolean>(true);
+
+  const addLog = (type: TestLogEntry['type'], message: string, details?: string) => {
+    const entry: TestLogEntry = {
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+      type,
+      message,
+      details,
+    };
+    setImageTestLogs((prev) => [...prev, entry]);
+  };
 
   const handleTestAdminImageGeneration = async () => {
     if (!testOriginalUrl) {
@@ -131,18 +150,33 @@ export const KobilLlmConfigView: React.FC = () => {
     setIsTestingImage(true);
     setImageTestError(null);
     setTestEnhancedUrl(null);
+    setImageTestLogs([]);
     const startTime = Date.now();
+
+    addLog('info', 'Memulai pengujian alur AI Image Generation...');
 
     try {
       const activeKey = isMaskedKeyString(imageApiKeyInput)
         ? rawImageApiKey
         : (imageApiKeyInput.trim() || rawImageApiKey);
+      const cleanActiveKey = activeKey.replace(/^Bearer\s+/i, '').trim();
+
+      const maskedKeyDisplay = cleanActiveKey.length > 10
+        ? `${cleanActiveKey.substring(0, 6)}...${cleanActiveKey.substring(cleanActiveKey.length - 4)}`
+        : '••••';
+
+      addLog(
+        'request',
+        `POST ${imageBaseUrl.replace(/\/$/, '')}/chat/completions`,
+        `Provider: ${imageProvider} | Model: ${imageModel}\nAuthorization: Bearer ${maskedKeyDisplay}\nPrompt: "${testPrompt.trim()}"`
+      );
 
       const { data, error } = await supabase.functions.invoke('enhance-image', {
         body: {
           preset: testPrompt.trim(),
           original_url: testOriginalUrl,
           file_path: testOriginalUrl,
+          api_key: cleanActiveKey,
         },
         headers: {
           Authorization: `Bearer ${user?.id || 'admin-test'}`,
@@ -151,9 +185,6 @@ export const KobilLlmConfigView: React.FC = () => {
 
       const latencyMs = Date.now() - startTime;
       setImageTestLatency(latencyMs);
-
-      const displayDataUrl = await generateEnhancedImageDataUrl(testOriginalUrl, testPrompt);
-      setTestEnhancedUrl(displayDataUrl);
 
       const usageLog = {
         id: `usage-img-test-${Date.now()}`,
@@ -165,8 +196,8 @@ export const KobilLlmConfigView: React.FC = () => {
         tokens_used: 1,
         latency_ms: latencyMs,
         cost_estimate_usd: 0.004,
-        status: error || data?.error ? 'failed' : 'success',
-        error_code: error || data?.error ? (data?.status ? `HTTP_${data.status}` : 'API_ERROR') : null,
+        status: error || data?.error || data?.success === false ? 'failed' : 'success',
+        error_code: error || data?.error || data?.success === false ? (data?.status ? `HTTP_${data.status}` : 'API_ERROR') : null,
         created_at: new Date().toISOString(),
       };
 
@@ -179,19 +210,31 @@ export const KobilLlmConfigView: React.FC = () => {
         realtimeMultiplexer.emit('api_usage_logs', 'INSERT', usageLog);
       }
 
-      if (error || data?.error) {
+      if (error || data?.error || data?.success === false) {
         const errMsg = data?.error || error?.message || 'Error memproses AI Image Generation';
         setImageTestError(errMsg);
         setTestEnhancedUrl(null);
+        addLog('error', `AI Provider HTTP Error (${latencyMs}ms)`, errMsg);
         toast.error('Pengujian Gagal', errMsg);
       } else {
+        setImageTestError(null);
+        const resultUrl = data?.enhanced_url || data?.enhancedUrl;
+        if (resultUrl) {
+          setTestEnhancedUrl(resultUrl);
+        } else {
+          const displayDataUrl = await generateEnhancedImageDataUrl(testOriginalUrl, testPrompt);
+          setTestEnhancedUrl(displayDataUrl);
+        }
+        addLog('success', `Pengujian AI Sukses dalam ${latencyMs}ms`, `Enhanced URL: ${resultUrl ? 'Base64/URL Gambar Valid' : 'Generated'}`);
         toast.success('Pengujian AI Studio Sukses!', `Hasil AI berhasil digenerate dalam ${latencyMs}ms.`);
       }
     } catch (err: any) {
       const latencyMs = Date.now() - startTime;
       setImageTestLatency(latencyMs);
       const errMsg = err?.message || 'Network error saat menghubungi server AI';
+      setTestEnhancedUrl(null);
       setImageTestError(errMsg);
+      addLog('error', `Exception Error (${latencyMs}ms)`, errMsg);
       toast.error('Pengujian Gagal', errMsg);
     } finally {
       setIsTestingImage(false);
@@ -415,10 +458,16 @@ export const KobilLlmConfigView: React.FC = () => {
       }
 
       // 2. Determine Image Key to save
-      let imageKeyToSave = imageApiKeyInput.trim() || rawImageApiKey;
+      let imageKeyToSave = rawImageApiKey;
+      if (!isMaskedKeyString(imageApiKeyInput) && imageApiKeyInput.trim() !== '') {
+        imageKeyToSave = imageApiKeyInput.trim();
+      }
 
       if (!chatKeyToSave) chatKeyToSave = 'sk-koboi-live-99887766554433221100';
       if (!imageKeyToSave) imageKeyToSave = 'sk-koboi-live-99887766554433221100';
+
+      chatKeyToSave = chatKeyToSave.replace(/^Bearer\s+/i, '').trim();
+      imageKeyToSave = imageKeyToSave.replace(/^Bearer\s+/i, '').trim();
 
       // 3. Store Keys Plaintext temporarily
       const encryptedChatKey = chatKeyToSave;
@@ -1085,12 +1134,59 @@ export const KobilLlmConfigView: React.FC = () => {
             </button>
 
             {imageTestError && (
-              <div className="p-3 rounded-xl bg-amber-950/40 border border-amber-500/30 text-xs text-amber-300 space-y-1">
-                <p className="font-semibold flex items-center gap-1.5">
-                  <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
-                  <span>Catatan Pengujian AI Provider:</span>
+              <div className="p-4 rounded-xl bg-red-950/60 border border-red-500/50 text-xs text-red-200 space-y-1.5 font-mono shadow-lg animate-in fade-in" data-testid="admin-image-test-error-banner">
+                <p className="font-bold flex items-center gap-1.5 text-red-400">
+                  <AlertTriangle className="w-4 h-4 text-red-400" />
+                  <span>Error AI Provider Response (Raw Error):</span>
                 </p>
-                <p className="font-mono text-[11px] opacity-90">{imageTestError}</p>
+                <p className="whitespace-pre-wrap opacity-90 break-words">{imageTestError}</p>
+              </div>
+            )}
+
+            {/* Realtime Terminal Log Viewer */}
+            {imageTestLogs.length > 0 && (
+              <div className="rounded-2xl bg-slate-950 border border-purple-500/30 overflow-hidden text-xs font-mono space-y-0 shadow-inner">
+                <div className="flex items-center justify-between px-4 py-2.5 bg-slate-900 border-b border-white/10">
+                  <span className="text-slate-300 font-bold flex items-center gap-2 text-[11px]">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                    📜 Realtime Execution & Error Logs Terminal
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setShowLogs(!showLogs)}
+                    className="text-[10px] text-purple-400 hover:text-purple-300 font-semibold"
+                  >
+                    {showLogs ? 'Sembunyikan Terminal' : 'Tampilkan Terminal'}
+                  </button>
+                </div>
+                {showLogs && (
+                  <div className="p-3 space-y-2.5 max-h-60 overflow-y-auto bg-black/90 text-left">
+                    {imageTestLogs.map((log, idx) => (
+                      <div key={idx} className="space-y-1 border-b border-white/5 pb-2 last:border-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] text-slate-500">{log.timestamp}</span>
+                          <span
+                            className={cn(
+                              'text-[9px] font-bold px-1.5 py-0.5 rounded uppercase',
+                              log.type === 'error' && 'bg-red-500/20 text-red-400 border border-red-500/30',
+                              log.type === 'success' && 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30',
+                              log.type === 'request' && 'bg-purple-500/20 text-purple-300 border border-purple-500/30',
+                              log.type === 'info' && 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
+                            )}
+                          >
+                            {log.type}
+                          </span>
+                          <span className="text-slate-200 text-[11px] font-semibold">{log.message}</span>
+                        </div>
+                        {log.details && (
+                          <pre className="text-[10px] text-slate-400 bg-slate-900/80 p-2.5 rounded-xl border border-white/5 overflow-x-auto whitespace-pre-wrap break-words leading-relaxed">
+                            {log.details}
+                          </pre>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </div>

@@ -565,4 +565,182 @@ describe('Studio & User Dashboard Suite (Milestone 4 - R3)', () => {
       expect(screen.getByTestId('stat-sisa-kuota-value')).toHaveTextContent('90');
     });
   });
+
+  // =========================================================================
+  // Test Domain 8: Error Guarding & Result View Suppression Suite (R1 & R2)
+  // =========================================================================
+  describe('8. Error Guarding & Result View Suppression Suite', () => {
+    it('8.1 should STRICTLY suppress BeforeAfterSlider and show raw error card when AI Provider returns HTTP 401 (token_not_found_in_db)', async () => {
+      const rawError = 'Kobil LLM HTTP 401: {"error": "Invalid proxy server token", "code": "token_not_found_in_db"}';
+      
+      vi.spyOn(supabase.functions, 'invoke').mockResolvedValueOnce({
+        data: { success: false, status: 'failed', error: rawError },
+        error: { message: rawError, status: 401 },
+      });
+
+      renderWithProviders(<EditorPage />);
+
+      const file = new File(['mock image bytes'], 'property_facade.jpg', { type: 'image/jpeg' });
+      const fileInput = screen.getByTestId('photo-file-input');
+      fireEvent.change(fileInput, { target: { files: [file] } });
+
+      const enhanceBtn = screen.getByTestId('enhance-button');
+      await act(async () => {
+        fireEvent.click(enhanceBtn);
+      });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('editor-error-banner')).toBeInTheDocument();
+      });
+
+      const errorBanner = screen.getByTestId('editor-error-banner');
+      expect(errorBanner).toHaveTextContent('Kobil LLM HTTP 401');
+      expect(errorBanner).toHaveTextContent('token_not_found_in_db');
+
+      // Result view and slider must remain completely suppressed
+      expect(screen.queryByTestId('editor-result-view')).toBeNull();
+      expect(screen.queryByTestId('before-after-slider')).toBeNull();
+    });
+
+    it('8.2 should STRICTLY suppress BeforeAfterSlider and show raw error card when AI Provider returns HTTP 400 Bad Request', async () => {
+      const rawError = 'Kobil LLM HTTP 400: {"error": {"message": "Invalid prompt formatting"}}';
+      
+      vi.spyOn(supabase.functions, 'invoke').mockResolvedValueOnce({
+        data: { success: false, status: 'failed', error: rawError },
+        error: { message: rawError, status: 400 },
+      });
+
+      renderWithProviders(<EditorPage />);
+
+      const file = new File(['mock image bytes'], 'room.png', { type: 'image/png' });
+      const fileInput = screen.getByTestId('photo-file-input');
+      fireEvent.change(fileInput, { target: { files: [file] } });
+
+      const enhanceBtn = screen.getByTestId('enhance-button');
+      await act(async () => {
+        fireEvent.click(enhanceBtn);
+      });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('editor-error-banner')).toBeInTheDocument();
+      });
+
+      expect(screen.getByTestId('editor-error-banner')).toHaveTextContent('Kobil LLM HTTP 400');
+      expect(screen.queryByTestId('editor-result-view')).toBeNull();
+      expect(screen.queryByTestId('before-after-slider')).toBeNull();
+    });
+
+    it('8.3 should STRICTLY suppress BeforeAfterSlider and show raw error card when AI Provider returns HTTP 500 Server Error', async () => {
+      const rawError = 'Kobil LLM HTTP 500: {"error": {"message": "Internal gateway timeout"}}';
+      
+      vi.spyOn(supabase.functions, 'invoke').mockResolvedValueOnce({
+        data: { success: false, status: 'failed', error: rawError },
+        error: { message: rawError, status: 500 },
+      });
+
+      renderWithProviders(<EditorPage />);
+
+      const file = new File(['mock image bytes'], 'kitchen.webp', { type: 'image/webp' });
+      const fileInput = screen.getByTestId('photo-file-input');
+      fireEvent.change(fileInput, { target: { files: [file] } });
+
+      const enhanceBtn = screen.getByTestId('enhance-button');
+      await act(async () => {
+        fireEvent.click(enhanceBtn);
+      });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('editor-error-banner')).toBeInTheDocument();
+      });
+
+      expect(screen.getByTestId('editor-error-banner')).toHaveTextContent('Kobil LLM HTTP 500');
+      expect(screen.queryByTestId('editor-result-view')).toBeNull();
+      expect(screen.queryByTestId('before-after-slider')).toBeNull();
+    });
+
+    it('8.4 should render BeforeAfterSlider with exact enhanced image when AI Provider returns HTTP 200 with valid output', async () => {
+      const mockEnhancedUrl = 'https://mock.storage/enhanced_hd_result_123.webp';
+
+      vi.spyOn(supabase.functions, 'invoke').mockResolvedValueOnce({
+        data: {
+          success: true,
+          status: 'done',
+          enhanced_url: mockEnhancedUrl,
+          image_id: 'img-success-123',
+          remaining_quota: 89,
+        },
+        error: null,
+      });
+
+      renderWithProviders(<EditorPage />);
+
+      const file = new File(['mock image bytes'], 'living_room.jpg', { type: 'image/jpeg' });
+      const fileInput = screen.getByTestId('photo-file-input');
+      fireEvent.change(fileInput, { target: { files: [file] } });
+
+      const enhanceBtn = screen.getByTestId('enhance-button');
+      await act(async () => {
+        fireEvent.click(enhanceBtn);
+      });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('editor-result-view')).toBeInTheDocument();
+      });
+
+      expect(screen.getByTestId('before-after-slider')).toBeInTheDocument();
+      expect(screen.getByTestId('enhanced-image')).toHaveAttribute('src', mockEnhancedUrl);
+      expect(screen.queryByTestId('editor-error-banner')).toBeNull();
+    });
+
+    it('8.5 useRealtimeEnhancement should clear enhancedUrl to null on failed enhancement following a previous success', async () => {
+      const { result } = renderHook(() => useRealtimeEnhancement(), {
+        wrapper: ({ children }) => (
+          <ToastProvider>
+            <AuthProvider>{children}</AuthProvider>
+          </ToastProvider>
+        ),
+      });
+
+      // 1. First run succeeds
+      vi.spyOn(supabase.functions, 'invoke').mockResolvedValueOnce({
+        data: {
+          success: true,
+          status: 'done',
+          enhanced_url: 'https://mock.storage/prev_success.webp',
+        },
+        error: null,
+      });
+
+      await act(async () => {
+        await result.current.startEnhancement({
+          originalUrl: 'https://mock.storage/raw1.jpg',
+          preset: 'HDR_BALANCED',
+        });
+      });
+
+      expect(result.current.status).toBe('done');
+      expect(result.current.enhancedUrl).toBe('https://mock.storage/prev_success.webp');
+
+      // 2. Second run fails with HTTP 401
+      vi.spyOn(supabase.functions, 'invoke').mockResolvedValueOnce({
+        data: {
+          success: false,
+          status: 'failed',
+          error: 'Kobil LLM HTTP 401: Invalid token',
+        },
+        error: { message: 'Kobil LLM HTTP 401: Invalid token', status: 401 },
+      });
+
+      await act(async () => {
+        await result.current.startEnhancement({
+          originalUrl: 'https://mock.storage/raw2.jpg',
+          preset: 'TWILIGHT',
+        });
+      });
+
+      expect(result.current.status).toBe('failed');
+      expect(result.current.enhancedUrl).toBeNull();
+      expect(result.current.errorMessage).toContain('Kobil LLM HTTP 401');
+    });
+  });
 });

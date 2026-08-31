@@ -20,6 +20,7 @@ import AdminAuditLogsPage from '../../src/pages/admin/AdminAuditLogsPage';
 import { AuditLogsTable } from '../../src/components/admin/AuditLogsTable';
 import AdminSettingsPage from '../../src/pages/admin/AdminSettingsPage';
 import { SettingsCms } from '../../src/components/admin/SettingsCms';
+import KobilLlmConfigView from '../../src/components/admin/KobilLlmConfigView';
 import { maskApiKey } from '../../src/lib/maskUtils';
 
 // Helper function to render components with all necessary providers
@@ -672,6 +673,94 @@ describe('Admin Management Panel & Audit Logging Suite (Milestone 5 - R4)', () =
       });
 
       expect(screen.getByText('Apakah ada watermark pada hasil foto?')).toBeInTheDocument();
+    });
+  });
+
+  // =========================================================================
+  // 8. Kobil LLM Config View & Admin AI Studio Test Suite (R1 & R2)
+  // =========================================================================
+  describe('8. Kobil LLM Config View & Admin AI Studio Test Suite (R1 & R2)', () => {
+    it('8.1 should strictly suppress BeforeAfterSlider and show raw error card when admin test image generation fails with HTTP 401', async () => {
+      const rawError = 'Kobil LLM HTTP 401: {"error": {"message": "Invalid proxy server token", "code": "token_not_found_in_db"}}';
+
+      vi.spyOn(supabase.functions, 'invoke').mockResolvedValueOnce({
+        data: { success: false, status: 'failed', error: rawError },
+        error: { message: rawError, status: 401 },
+      });
+
+      renderWithProviders(<KobilLlmConfigView />);
+
+      const testBtn = screen.getByRole('button', { name: /⚡ Uji Generate Gambar AI Studio Realtime/i });
+      fireEvent.click(testBtn);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('admin-image-test-error-banner')).toBeInTheDocument();
+      });
+
+      const errorBanner = screen.getByTestId('admin-image-test-error-banner');
+      expect(errorBanner).toHaveTextContent('Kobil LLM HTTP 401');
+      expect(errorBanner).toHaveTextContent('token_not_found_in_db');
+
+      // BeforeAfterSlider must not be rendered
+      expect(screen.queryByTestId('before-after-slider')).toBeNull();
+    });
+
+    it('8.2 should render BeforeAfterSlider with generated image when admin test succeeds with HTTP 200', async () => {
+      const mockResultUrl = 'https://mock.storage/admin_enhanced_sample_99.webp';
+
+      vi.spyOn(supabase.functions, 'invoke').mockResolvedValueOnce({
+        data: {
+          success: true,
+          status: 'done',
+          enhanced_url: mockResultUrl,
+          image_id: 'img-admin-test-success',
+        },
+        error: null,
+      });
+
+      renderWithProviders(<KobilLlmConfigView />);
+
+      const testBtn = screen.getByRole('button', { name: /⚡ Uji Generate Gambar AI Studio Realtime/i });
+      fireEvent.click(testBtn);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('before-after-slider')).toBeInTheDocument();
+      });
+
+      expect(screen.getByTestId('enhanced-image')).toHaveAttribute('src', mockResultUrl);
+      expect(screen.queryByTestId('admin-image-test-error-banner')).toBeNull();
+    });
+
+    it('8.3 should NOT overwrite raw API key with masked placeholder when saving configuration', async () => {
+      const originalRawKey = 'sk-real-live-secret-key-998877';
+      if (typeof window !== 'undefined' && window.localStorage) {
+        localStorage.setItem(
+          'pea_ai_provider_config_v4',
+          JSON.stringify({
+            chatConfig: { purpose: 'chat', providerName: 'kobil_llm', baseUrl: 'https://api.koboillm.com/v1', modelName: 'gemini-2.5-flash', rawApiKey: originalRawKey },
+            imageConfig: { purpose: 'image_generation', providerName: 'kobil_llm', baseUrl: 'https://api.koboillm.com/v1', modelName: 'gemini-2.5-flash-image', rawApiKey: originalRawKey },
+            updatedAt: new Date().toISOString(),
+          })
+        );
+      }
+
+      renderWithProviders(<KobilLlmConfigView />);
+
+      await waitFor(() => {
+        expect(screen.getByText(/Konfigurasi AI System/i)).toBeInTheDocument();
+      });
+
+      const saveBtn = screen.getByRole('button', { name: /Simpan Semua Konfigurasi/i });
+      fireEvent.click(saveBtn);
+
+      await waitFor(() => {
+        expect(screen.getByText(/Pengaturan AI Berhasil Disimpan/i)).toBeInTheDocument();
+      });
+
+      const saved = JSON.parse(localStorage.getItem('pea_ai_provider_config_v4') || '{}');
+      expect(saved.imageConfig.rawApiKey).toBe(originalRawKey);
+      expect(saved.imageConfig.rawApiKey).not.toContain('••••');
+      expect(saved.imageConfig.rawApiKey).not.toContain('...');
     });
   });
 });

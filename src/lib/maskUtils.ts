@@ -60,3 +60,8 @@ export function formatCycleResetDate(dateStr: string | null | undefined): string
     return dateStr;
   }
 }
+
+export function isMaskedKeyString(key: string | null | undefined): boolean {
+  if (!key || typeof key !== 'string') return false;
+  return key.startsWith('••••') || key.includes('...') || key === '****';
+}

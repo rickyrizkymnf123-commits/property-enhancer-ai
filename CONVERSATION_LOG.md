@@ -74,7 +74,47 @@
    - **Error Alert Banner Only**: Displays only the raw HTTP error message card detailing the LiteLLM Proxy / API response status so users/admins immediately see why no image was generated.
    - **Verified Build & Tests**: 100% test pass rate (340/340) and clean production build (`built in 2.35s`). Committed and pushed to GitHub commit `d8eae2c`.
 
-13. **AI Studio Image Enhancement Error Handling & Kobil LLM Proxy Auth Integration**:
-   - **Strict Error Guard & Result View Suppression**: Hide/suppress Before/After slider and "SESUDAH (AI)" fallback image when AI API returns HTTP error (e.g. 401, 400, 500); display prominent error card with raw server JSON error message.
-   - **Kobil LLM Proxy API Key & Token Credentials Resolution**: Ensure active Admin/User API key is passed cleanly in `Authorization: Bearer <key>` header to `https://api.koboillm.com/v1/chat/completions` across `KobilLlmConfigView.tsx`, `useRealtimeEnhancement.ts`, `mockSupabase.ts`, and `supabase/functions/enhance-image/index.ts`.
-   - **100% Tests Pass**: Maintain full pass rate across Vitest unit and E2E test suites.
+14. **Investigation of Error Guard & Result View Suppression in AI Studio & Editor (Explorer 1)**:
+   - Investigated `EditorPage.tsx`, `useRealtimeEnhancement.ts`, `KobilLlmConfigView.tsx`, `BeforeAfterSlider.tsx`, `mockSupabase.ts`, and `supabase/functions/enhance-image/index.ts`.
+   - Identified critical fixes:
+     1. In `KobilLlmConfigView.tsx`: remove premature fallback generation at line 155 before error check; ensure `testEnhancedUrl` is strictly `null` on error and error card has prominent red styling.
+     2. In `useRealtimeEnhancement.ts`: explicitly reset `enhancedUrl = null` on start, error, and realtime `failed` event.
+     3. In `supabase/functions/enhance-image/index.ts`: query `api_provider_settings` with `.eq("purpose", "image_generation")`.
+   - Delivered full analysis report (`.agents/explorer_1/report.md`) and 5-component handoff report (`.agents/explorer_1/handoff.md`).
+
+16. **Implementation of AI Studio Error Handling (R1) & Kobil LLM Proxy Auth (R2) (Worker 1)**:
+   - **Strict Result View Suppression**:
+     - Removed premature fallback image generation in `KobilLlmConfigView.tsx` `handleTestAdminImageGeneration` before error verification.
+     - Ensured `testEnhancedUrl` is only set when response is strictly error-free (`!error && !data?.error && data?.success !== false`).
+     - Explicitly reset `testEnhancedUrl(null)` on error in both API check and catch blocks.
+     - Updated admin test error banner styling to prominent red card (`bg-red-950/60 border-red-500/50 text-red-200`) with data-testid `admin-image-test-error-banner`.
+     - In `useRealtimeEnhancement.ts`, added `setEnhancedUrl(null)` on `startEnhancement`, in error branches, in catch block, and in realtime listener on `status === 'failed'`.
+     - Verified `EditorPage.tsx` strict boolean guard `isDone = status === 'done' && !!enhancedUrl && !errorMessage`.
+   - **Kobil LLM Proxy Auth & Bearer Token Resolution**:
+     - Fixed `KobilLlmConfigView.tsx:418` `imageKeyToSave` resolution by adding `!isMaskedKeyString(imageApiKeyInput)` guard, preventing masked placeholder strings (`sk-k...1100`) from overwriting real raw API keys on save.
+     - Sanitized API keys across frontend and edge functions by stripping leading `Bearer ` prefix and trimming whitespace (`apiKey.replace(/^Bearer\s+/i, '').trim()`).
+     - Added `.eq("purpose", "image_generation")` and `.order("updated_at", { ascending: false })` filter to `api_provider_settings` query in `supabase/functions/enhance-image/index.ts`.
+     - Normalized fallback base URL in `supabase/functions/list-ai-models/index.ts` to `https://api.koboillm.com/v1`.
+     - Updated `src/lib/mockSupabase.ts` to cleanly pass Bearer tokens and clear `enhanced_url` to null on errors.
+   - **Comprehensive Test Coverage**:
+     - Added Domain 8 to `tests/unit/studio.test.tsx` (5 tests covering HTTP 401 token_not_found_in_db, HTTP 400, HTTP 500, HTTP 200 success rendering, and state reset).
+     - Added Tests 3, 4, 5, 6 to `tests/unit/edge_functions.test.ts` (Kobil Proxy Bearer token verification, HTTP 401 token_not_found_in_db propagation, HTTP 400/500 propagation, Bearer prefix sanitization).
+     - Added Domain 8 to `tests/unit/admin_audit.test.tsx` (3 tests covering admin test 401 suppression, admin test 200 success rendering, and masked key save protection).
+
+17. **Independent Quality & Adversarial Review of Milestone 7 (Reviewer 1)**:
+    - Performed comprehensive, independent review and adversarial testing of AI Studio Error Handling (R1) & Kobil LLM Proxy Auth Integration (R2).
+    - Verified result view suppression on 401/400/500, state reset on sequential runs, Bearer prefix sanitization, and masked key protection.
+    - Confirmed all 352 automated tests in Vitest pass 100% and production build (`npm run build`) builds cleanly with zero errors.
+    - Issued formal **APPROVE** verdict in `.agents/reviewer_1/report.md` and `.agents/reviewer_1/handoff.md`.
+
+18. **Adversarial Stress Testing & Verification of Milestone 7 (Challenger 1)**:
+    - Conducted empirical stress testing and boundary verification of Milestone 7 (AI Studio Error Handling & Kobil LLM Proxy Auth Integration).
+    - Stress-tested error guarding, stale state leakage across sequential calls, non-JSON / HTML error handling, Bearer prefix stripping, and masked key save resilience.
+    - Verified Before/After slider suppression across Editor and Admin Studio under all HTTP error conditions (401, 400, 500, network failure).
+    - Documented exhaustive findings in `.agents/challenger_1/report.md` and delivered 5-component handoff report in `.agents/challenger_1/handoff.md` with explicit verdict **APPROVE**.
+19. **Independent Quality & Adversarial Review of Milestone 7 (Reviewer 2)**:
+    - Conducted independent quality review and adversarial critique of Milestone 7 (AI Studio Error Handling & Kobil LLM Proxy Auth Integration).
+    - Verified strict result view and slider suppression across `useRealtimeEnhancement.ts`, `EditorPage.tsx`, `KobilLlmConfigView.tsx`, and edge functions under HTTP 401, 400, 500, and network error conditions.
+    - Verified clean Bearer token propagation, prefix sanitization, and prevention of masked placeholder key overwrites.
+    - Verified all 352 automated tests in Vitest pass (100% pass rate) and `npm run build` builds cleanly in 2.42s with zero errors.
+    - Documented comprehensive report in `.agents/reviewer_2/report.md` and 5-component handoff in `.agents/reviewer_2/handoff.md` with explicit verdict **APPROVE**.

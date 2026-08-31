@@ -20,9 +20,13 @@
    - Query resolution orders by `updated_at DESC` with `.maybeSingle()`.
 
 4. **Testing Standards**:
-   - Full Vitest suite covers 340 tests across 11 files (`npm run test` passes 100%).
+   - Full Vitest suite covers 352 tests across 11 files (`npm run test` passes 100%).
 
-5. **Error Guarding & Kobil LLM Proxy Auth**:
+5. **Error Guarding & Kobil LLM Proxy Auth (Completed)**:
    - Strict suppression of Before/After slider & fallback result images on any AI HTTP error (401, 400, 500). Raw JSON error displayed prominently in alert card.
-   - Clean Bearer token propagation across KobilLlmConfigView, useRealtimeEnhancement, mockSupabase, and enhance-image edge function.
+   - Clean Bearer token propagation (`Authorization: Bearer <key>`) across KobilLlmConfigView, useRealtimeEnhancement, mockSupabase, and enhance-image edge function.
+   - `useRealtimeEnhancement` and `KobilLlmConfigView` strictly clear `enhancedUrl`/`testEnhancedUrl` to null on any error or failed status.
+   - `imageKeyToSave` in `KobilLlmConfigView.tsx` guards against masked placeholder strings (`isMaskedKeyString`) to prevent key corruption on save.
+   - `enhance-image` edge function queries `api_provider_settings` with `.eq("purpose", "image_generation")`.
+   - Comprehensive unit test coverage added in `studio.test.tsx`, `edge_functions.test.ts`, and `admin_audit.test.tsx`.
 

@@ -168,6 +168,7 @@ property-enhancer-ai/
 | 4 | User Dashboard & Enhancement Studio with Realtime (R3) | `/app/*` routes, stats, upload validation, presets, Supabase Realtime subscriptions, before/after slider, zoom viewer, download, quota exhaustion guard, gallery, projects, settings | M1, M2 | DONE |
 | 5 | Admin Panel & Audit Logging (R4) | `/admin/*` routes, UserDashboardContent embed, user management, audit logging, provider switch, system keys, usage logs, notifications, settings CMS | M1, M2 | DONE |
 | 6 | Final E2E Test Pass & Adversarial Hardening (Tiers 1-5) | 100% pass on E2E test suite (Tiers 1-4, 220 automated tests) + Tier 5 adversarial stress testing | M1, M2, M3, M4, M5, TEST_READY | DONE |
+| 7 | AI Studio Error Handling & Kobil LLM Proxy Auth (R1-R2) | Strict result view suppression on AI errors (no Before/After slider on 401/400/500), raw error card display, clean Bearer token propagation across KobilLlmConfigView, useRealtimeEnhancement, mockSupabase, enhance-image edge function, and 100% Vitest test pass | M4, M5, M6 | IN_PROGRESS |
 
 ---
 

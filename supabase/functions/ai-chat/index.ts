@@ -62,6 +62,8 @@ export async function handleAiChat(req: Request): Promise<Response> {
       }
     }
 
+    apiKey = apiKey.replace(/^Bearer\s+/i, '').trim();
+
     if (!apiKey) {
       return new Response(
         JSON.stringify({ error: "API Key wajib diisi untuk menguji koneksi chat." }),

@@ -1314,7 +1314,7 @@ export class MockFunctionsClient {
 
     const providerName = imageProviderSetting?.provider_name || 'kobil_llm';
     const modelName = imageProviderSetting?.model_name || 'gemini-2.5-flash-image';
-    const rawApiKey = (imageProviderSetting as any)?.api_key_encrypted || 'sk-koboi-live-99887766554433221100';
+    const rawApiKey = ((imageProviderSetting as any)?.api_key_encrypted || 'sk-koboi-live-99887766554433221100').replace(/^Bearer\s+/i, '').trim();
     const rawBaseUrl = ((imageProviderSetting as any)?.base_url || 'https://api.koboillm.com/v1').replace('koboiillm.com', 'koboillm.com').replace(/\/$/, '');
 
     // AI Provider Error Simulation if flagged
@@ -1329,6 +1329,7 @@ export class MockFunctionsClient {
 
       newImage.status = 'failed';
       newImage.error_message = mockDb.aiProviderErrorMessage;
+      newImage.enhanced_url = null;
       newImage.updated_at = new Date().toISOString();
       mockDb.images.set(imageId, { ...newImage });
       realtimeMultiplexer.emit('images', 'UPDATE', { ...newImage });
@@ -1426,6 +1427,7 @@ export class MockFunctionsClient {
     if (rawApiError) {
       newImage.status = 'failed';
       newImage.error_message = rawApiError;
+      newImage.enhanced_url = null;
       newImage.updated_at = new Date().toISOString();
       mockDb.images.set(imageId, { ...newImage });
       realtimeMultiplexer.emit('images', 'UPDATE', { ...newImage });

@@ -37,7 +37,11 @@ export function useRealtimeEnhancement(): UseRealtimeEnhancementReturn {
     setActiveImage(record);
     setStatus(record.status);
     if (record.original_url) setOriginalUrl(record.original_url);
-    if (record.enhanced_url) setEnhancedUrl(record.enhanced_url);
+    if (record.status === 'failed') {
+      setEnhancedUrl(null);
+    } else if (record.enhanced_url) {
+      setEnhancedUrl(record.enhanced_url);
+    }
     if (record.error_message) setErrorMessage(record.error_message);
   }, []);
 
@@ -64,7 +68,11 @@ export function useRealtimeEnhancement(): UseRealtimeEnhancementReturn {
             setActiveImage(newRecord);
             setStatus(newRecord.status);
             if (newRecord.original_url) setOriginalUrl(newRecord.original_url);
-            if (newRecord.enhanced_url) setEnhancedUrl(newRecord.enhanced_url);
+            if (newRecord.status === 'failed') {
+              setEnhancedUrl(null);
+            } else if (newRecord.enhanced_url) {
+              setEnhancedUrl(newRecord.enhanced_url);
+            }
             if (newRecord.error_message) setErrorMessage(newRecord.error_message);
           }
         }
@@ -87,6 +95,7 @@ export function useRealtimeEnhancement(): UseRealtimeEnhancementReturn {
     }
 
     setErrorMessage(null);
+    setEnhancedUrl(null);
     setStatus('queued');
 
     try {
@@ -134,6 +143,7 @@ export function useRealtimeEnhancement(): UseRealtimeEnhancementReturn {
 
       if (error || data?.error || data?.success === false) {
         setStatus('failed');
+        setEnhancedUrl(null);
         const errMsg = data?.error || error?.message || 'Terjadi kesalahan pada AI processing';
         setErrorMessage(errMsg);
         return { success: false, error: errMsg };
@@ -159,6 +169,7 @@ export function useRealtimeEnhancement(): UseRealtimeEnhancementReturn {
     } catch (err: any) {
       console.error('Enhancement error:', err);
       setStatus('failed');
+      setEnhancedUrl(null);
       const errText = err?.message || 'Gagal memproses enhancement';
       setErrorMessage(errText);
       return { success: false, error: errText };

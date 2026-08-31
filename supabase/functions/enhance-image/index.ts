@@ -54,14 +54,27 @@ export async function handleEnhanceImage(req: Request): Promise<Response> {
     const supabaseServiceKey = getEnv("SUPABASE_SERVICE_ROLE_KEY") || getEnv("VITE_SUPABASE_ANON_KEY") || "service-role-key";
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
-    // 1. Ambil config Kobil LLM dari database
-    const { data: config, error: configError } = await supabaseAdmin
+    // 1. Ambil config Kobil LLM dari database untuk purpose='image_generation'
+    let { data: config, error: configError } = await supabaseAdmin
       .from("api_provider_settings")
       .select("base_url, model_name, api_key_encrypted")
-      .eq("provider_name", "kobil_llm")
+      .eq("purpose", "image_generation")
       .eq("is_active", true)
+      .order("updated_at", { ascending: false })
       .limit(1)
       .maybeSingle();
+
+    if (!config) {
+      const fallbackQuery = await supabaseAdmin
+        .from("api_provider_settings")
+        .select("base_url, model_name, api_key_encrypted")
+        .eq("provider_name", "kobil_llm")
+        .eq("is_active", true)
+        .limit(1)
+        .maybeSingle();
+      config = fallbackQuery.data;
+      configError = fallbackQuery.error;
+    }
 
     if (configError || !config) {
       throw new Error("Config Kobil LLM tidak ditemukan di database. Cek tabel api_provider_settings.");
@@ -70,15 +83,16 @@ export async function handleEnhanceImage(req: Request): Promise<Response> {
     if (!config.model_name) throw new Error("model_name kosong di config Kobil LLM.");
     if (!config.api_key_encrypted) throw new Error("API key kosong di config Kobil LLM.");
 
-    // Plaintext API Key untuk versi sementara ini
-    let apiKey = config.api_key_encrypted;
+    // Plaintext / Encrypted API Key resolution
+    let apiKey = config.api_key_encrypted || "";
     if (apiKey.startsWith("enc_v1_")) {
       try {
         apiKey = atob(apiKey.substring(7));
       } catch (_) {}
     }
+    apiKey = apiKey.replace(/^Bearer\s+/i, '').trim();
 
-    const baseUrl = config.base_url.trim().replace("koboiillm.com", "koboillm.com").replace(/\/$/, "");
+    const baseUrl = (config.base_url || "https://api.koboillm.com/v1").trim().replace("koboiillm.com", "koboillm.com").replace(/\/$/, "");
     const endpoint = `${baseUrl}/chat/completions`;
 
     // 2. Panggil Kobil LLM (format OpenAI-compatible chat completions dengan image input)

@@ -19,7 +19,10 @@ export async function handleListModels(req: Request): Promise<Response> {
 
   try {
     const payload: ListModelsRequest = await req.json();
-    const baseUrl = payload.base_url || "https://api.koboiillm.com/v1";
+    const baseUrl = (payload.base_url || "https://api.koboillm.com/v1")
+      .trim()
+      .replace("koboiillm.com", "koboillm.com")
+      .replace(/\/$/, "");
     let apiKey = payload.api_key || "";
 
     // If key is masked or empty, read active key from DB
@@ -51,6 +54,8 @@ export async function handleListModels(req: Request): Promise<Response> {
         apiKey = dbSetting.api_key_encrypted;
       }
     }
+
+    apiKey = apiKey.replace(/^Bearer\s+/i, '').trim();
 
     if (!apiKey) {
       return new Response(
