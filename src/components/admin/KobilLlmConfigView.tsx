@@ -647,7 +647,7 @@ export const KobilLlmConfigView: React.FC = () => {
                   value={chatBaseUrl}
                   onChange={(e) => setChatBaseUrl(e.target.value)}
                   className="w-full text-xs rounded-xl bg-slate-950 border border-white/10 px-3 py-2.5 text-white font-mono focus:outline-none focus:ring-2 focus:ring-purple-500"
-                  placeholder="https://api.koboiillm.com/v1"
+                  placeholder="https://api.koboillm.com/v1"
                 />
               </div>
             )}
@@ -660,13 +660,19 @@ export const KobilLlmConfigView: React.FC = () => {
               <div className="relative">
                 <input
                   type={showChatKey ? 'text' : 'password'}
-                  value={chatApiKeyInput}
-                  onChange={(e) => setChatApiKeyInput(e.target.value)}
-                  onFocus={() => {
-                    if (isMaskedKeyString(chatApiKeyInput)) setChatApiKeyInput('');
+                  name="chat_api_key_vault_field"
+                  autoComplete="new-password"
+                  data-lpignore="true"
+                  value={showChatKey ? rawChatApiKey : chatApiKeyInput}
+                  onChange={(e) => {
+                    const newVal = e.target.value;
+                    setChatApiKeyInput(newVal);
+                    if (!isMaskedKeyString(newVal)) {
+                      setRawChatApiKey(newVal);
+                    }
                   }}
                   className="w-full text-xs rounded-xl bg-slate-950 border border-white/10 pl-3 pr-10 py-2.5 text-white font-mono focus:outline-none focus:ring-2 focus:ring-purple-500"
-                  placeholder="Ketik API key baru untuk mengganti..."
+                  placeholder="API Key tersimpan (Ketik untuk memperbarui)..."
                 />
                 <button
                   type="button"
@@ -755,7 +761,7 @@ export const KobilLlmConfigView: React.FC = () => {
                   value={imageBaseUrl}
                   onChange={(e) => setImageBaseUrl(e.target.value)}
                   className="w-full text-xs rounded-xl bg-slate-950 border border-white/10 px-3 py-2.5 text-white font-mono focus:outline-none focus:ring-2 focus:ring-purple-500"
-                  placeholder="https://api.koboiillm.com/v1"
+                  placeholder="https://api.koboillm.com/v1"
                 />
               </div>
             )}
@@ -768,13 +774,19 @@ export const KobilLlmConfigView: React.FC = () => {
               <div className="relative">
                 <input
                   type={showImageKey ? 'text' : 'password'}
-                  value={imageApiKeyInput}
-                  onChange={(e) => setImageApiKeyInput(e.target.value)}
-                  onFocus={() => {
-                    if (isMaskedKeyString(imageApiKeyInput)) setImageApiKeyInput('');
+                  name="image_api_key_vault_field"
+                  autoComplete="new-password"
+                  data-lpignore="true"
+                  value={showImageKey ? rawImageApiKey : imageApiKeyInput}
+                  onChange={(e) => {
+                    const newVal = e.target.value;
+                    setImageApiKeyInput(newVal);
+                    if (!isMaskedKeyString(newVal)) {
+                      setRawImageApiKey(newVal);
+                    }
                   }}
                   className="w-full text-xs rounded-xl bg-slate-950 border border-white/10 pl-3 pr-10 py-2.5 text-white font-mono focus:outline-none focus:ring-2 focus:ring-purple-500"
-                  placeholder="Ketik API key baru untuk mengganti..."
+                  placeholder="API Key tersimpan (Ketik untuk memperbarui)..."
                 />
                 <button
                   type="button"
