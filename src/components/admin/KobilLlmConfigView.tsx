@@ -51,6 +51,57 @@ export const isMaskedKeyString = (val: string | null | undefined): boolean => {
   );
 };
 
+export interface ImageCapableModel {
+  value: string;
+  label: string;
+  note: string;
+  isDefault?: boolean;
+}
+
+export const IMAGE_CAPABLE_MODELS: ImageCapableModel[] = [
+  {
+    value: 'gemini/gemini-2.5-flash-image',
+    label: 'Gemini 2.5 Flash Image',
+    note: 'Direkomendasikan — murah, cepat, stabil',
+    isDefault: true,
+  },
+  {
+    value: 'openai/gpt-image-1.5',
+    label: 'GPT Image 1.5',
+    note: 'Rekomendasi default OpenAI — balance kualitas & harga',
+  },
+  {
+    value: 'openai/gpt-image-1-mini',
+    label: 'GPT Image 1 Mini',
+    note: 'Paling murah, cocok untuk thumbnail/preview',
+  },
+  {
+    value: 'openai/gpt-image-2',
+    label: 'GPT Image 2',
+    note: 'Kualitas tertinggi, lebih mahal',
+  },
+  {
+    value: 'gemini/gemini-3.1-flash-image-preview',
+    label: 'Gemini 3.1 Flash Image (Preview)',
+    note: 'Lebih baru, ~1.7x lebih mahal dari 2.5 Flash',
+  },
+  {
+    value: 'gemini/gemini-3-pro-image-preview',
+    label: 'Gemini 3 Pro Image (Preview)',
+    note: 'Kualitas tertinggi Gemini, paling mahal',
+  },
+  {
+    value: 'vertex_ai/imagen-4.0-fast-generate-001',
+    label: 'Imagen 4.0 Fast',
+    note: 'Harga flat $0.02/gambar, deterministic',
+  },
+  {
+    value: 'vertex_ai/imagen-4.0-generate-001',
+    label: 'Imagen 4.0 Standard',
+    note: 'Harga flat $0.04/gambar',
+  },
+];
+
 export const DEFAULT_AI_CONFIG = {
   chatConfig: {
     purpose: 'chat' as const,
@@ -66,11 +117,7 @@ export const DEFAULT_AI_CONFIG = {
     baseUrl: 'https://api.koboillm.com/v1',
     apiKey: 'sk-koboi-live-99887766554433221100',
     modelName: 'gemini/gemini-2.5-flash-image',
-    availableModels: [
-      'gemini/gemini-2.5-flash-image',
-      'openai/gpt-image-1.5',
-      'vertex_ai/imagen-4.0-fast-generate-001',
-    ],
+    availableModels: IMAGE_CAPABLE_MODELS.map((m) => m.value),
   },
 };
 
@@ -95,6 +142,11 @@ export const KobilLlmConfigView: React.FC = () => {
   const [imageModel, setImageModel] = useState<string>(DEFAULT_AI_CONFIG.imageConfig.modelName);
   const [imageAvailableModels, setImageAvailableModels] = useState<string[]>(DEFAULT_AI_CONFIG.imageConfig.availableModels);
   const [showImageKey, setShowImageKey] = useState<boolean>(false);
+
+  const isValidImageModel = IMAGE_CAPABLE_MODELS.some((m) => m.value === imageModel);
+  const activeSelectedImageModel = isValidImageModel ? imageModel : 'gemini/gemini-2.5-flash-image';
+  const selectedImageModelInfo = IMAGE_CAPABLE_MODELS.find((m) => m.value === activeSelectedImageModel);
+  const [fetchedReferenceModels, setFetchedReferenceModels] = useState<string[]>([]);
 
   const [isFetchingChatModels, setIsFetchingChatModels] = useState<boolean>(false);
   const [isFetchingImageModels, setIsFetchingImageModels] = useState<boolean>(false);
@@ -443,20 +495,12 @@ export const KobilLlmConfigView: React.FC = () => {
       });
 
       if (error || !data?.success) {
-        const fallbackImageModels = [
-          'gemini-2.5-flash-image',
-          'gemini-2.5-flash-image-preview',
-          'gpt-image-1',
-          'imagen-3',
-          'kobil-image-v1',
-        ];
-        setImageAvailableModels(fallbackImageModels);
-        toast.info('Fallback Image Models Aktif', 'Menggunakan daftar model gambar standar.');
+        toast.info('Info Provider', 'Gagal mengambil daftar model dari provider.');
         return;
       }
 
       if (data.models && data.models.length > 0) {
-        setImageAvailableModels(data.models);
+        setFetchedReferenceModels(data.models);
         toast.success('Image Models Realtime Ditemukan', `Berhasil mengambil ${data.models.length} model dari ${imageBaseUrl}`);
       } else {
         toast.warning('Hasil Model Kosong', 'Provider merespon tetapi tidak mengembalikan daftar model.');
@@ -980,17 +1024,37 @@ export const KobilLlmConfigView: React.FC = () => {
                   <span>Fetch Image Models Realtime</span>
                 </button>
               </div>
+
+              {!isValidImageModel && (
+                <div className="mb-2.5 p-3 rounded-xl bg-amber-950/60 border border-amber-500/40 flex items-start gap-2.5 text-xs text-amber-200">
+                  <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-semibold text-amber-300">Model saat ini tidak valid untuk image generation. Pilih dari daftar di bawah.</p>
+                    <p className="text-[11px] text-amber-200/80 mt-0.5">
+                      Model sebelumnya (<code className="bg-black/40 px-1 py-0.5 rounded font-mono">{imageModel}</code>) adalah model teks. Otomatis dialihkan ke <code className="bg-black/40 px-1 py-0.5 rounded font-mono">gemini/gemini-2.5-flash-image</code> sampai Anda mengeklik Simpan.
+                    </p>
+                  </div>
+                </div>
+              )}
+
               <select
-                value={imageModel}
+                value={isValidImageModel ? imageModel : 'gemini/gemini-2.5-flash-image'}
                 onChange={(e) => setImageModel(e.target.value)}
                 className="w-full text-xs rounded-xl bg-slate-950 border border-purple-500/40 px-3 py-2.5 text-purple-300 font-bold focus:outline-none focus:ring-2 focus:ring-purple-500"
               >
-                {imageAvailableModels.map((m) => (
-                  <option key={m} value={m}>
-                    {m}
+                {IMAGE_CAPABLE_MODELS.map((m) => (
+                  <option key={m.value} value={m.value}>
+                    {m.label} ({m.value})
                   </option>
                 ))}
               </select>
+
+              {selectedImageModelInfo && (
+                <div className="mt-2 text-[11px] text-purple-300/80 flex items-center gap-1.5 font-medium">
+                  <span className="w-1.5 h-1.5 rounded-full bg-purple-400 shrink-0" />
+                  <span>{selectedImageModelInfo.note}</span>
+                </div>
+              )}
             </div>
           </div>
         </div>

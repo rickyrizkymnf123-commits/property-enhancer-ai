@@ -302,7 +302,7 @@ export class MockDatabase {
       is_enabled: true,
       is_active: true,
       base_url: 'https://api.koboillm.com/v1',
-      model_name: 'gemini-2.5-flash-image',
+      model_name: 'gemini/gemini-2.5-flash-image',
       api_key_encrypted: 'sk-koboi-live-99887766554433221100',
       config: {},
       created_at: new Date().toISOString(),
