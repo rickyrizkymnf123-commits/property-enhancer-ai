@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { AdminLayout } from '../../components/admin/AdminLayout';
 import { KobilLlmConfigView } from '../../components/admin/KobilLlmConfigView';
 import { ApiProviderSwitch } from '../../components/admin/ApiProviderSwitch';
-import { Bot, Cpu, Sparkles, SlidersHorizontal } from 'lucide-react';
+import type { ApiProviderConfig } from '../../types/admin.types';
+import { Bot, Cpu } from 'lucide-react';
 
 export const AdminProvidersPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'kobil' | 'gateway'>('kobil');
@@ -14,7 +15,7 @@ export const AdminProvidersPage: React.FC = () => {
     if (data) setProviders(data as ApiProviderConfig[]);
   };
 
-  React.useEffect(() => {
+  useEffect(() => {
     fetchProviders();
   }, []);
 

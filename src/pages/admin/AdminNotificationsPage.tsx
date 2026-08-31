@@ -40,7 +40,7 @@ export const AdminNotificationsPage: React.FC = () => {
       .subscribe();
 
     return () => {
-      supabase.removeChannel(channel);
+      supabase.removeChannel(channel as any);
     };
   }, [fetchNotifications]);
 

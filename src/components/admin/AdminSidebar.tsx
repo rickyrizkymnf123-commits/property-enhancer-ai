@@ -62,7 +62,7 @@ export const AdminSidebar: React.FC = () => {
 
     return () => {
       isMounted = false;
-      supabase.removeChannel(channel);
+      supabase.removeChannel(channel as any);
     };
   }, []);
 

@@ -95,7 +95,7 @@ export const ApiProviderSwitch: React.FC<ApiProviderSwitchProps> = ({
       }
 
       // 2. Mandatory Audit Logging
-      await supabase.rpc('log_admin_action', {
+      await (supabase.rpc as any)('log_admin_action', {
         p_action: 'switch_provider',
         p_action_type: 'switch_provider',
         p_admin_id: user?.id || null,

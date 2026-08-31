@@ -54,7 +54,7 @@ describe('Tier 5: Adversarial Coverage Hardening Test Suite (30 Tests)', () => {
 
       const finalEntitlement = mockDb.entitlements.get(userId);
       expect(finalEntitlement?.consumed_quota).toBe(50);
-      expect(finalEntitlement?.monthly_quota - finalEntitlement!.consumed_quota).toBe(50);
+      expect((finalEntitlement?.monthly_quota ?? 100) - finalEntitlement!.consumed_quota).toBe(50);
     });
 
     it('1.2: Over-subscription race: 25 concurrent requests with only 5 quota remaining strictly allows exactly 5 and rejects 20', async () => {

@@ -24,6 +24,7 @@ import { cn } from '../../lib/utils';
 
 export interface UserDashboardContentProps {
   customUserId?: string;
+  isAdminPreview?: boolean;
   onOpenTutorial?: () => void;
   className?: string;
 }

@@ -324,13 +324,13 @@ export const KobilLlmConfigView: React.FC = () => {
       // 3. Encrypt Keys
       let encryptedChatKey = chatKeyToSave.startsWith('enc_v1_') ? chatKeyToSave : `enc_v1_${btoa(chatKeyToSave)}`;
       try {
-        const { data: encRes } = await supabase.rpc('encrypt_api_key', { plain_key: chatKeyToSave });
+        const { data: encRes } = await (supabase.rpc as any)('encrypt_api_key', { plain_key: chatKeyToSave });
         if (encRes) encryptedChatKey = encRes;
       } catch (_) {}
 
       let encryptedImageKey = imageKeyToSave.startsWith('enc_v1_') ? imageKeyToSave : `enc_v1_${btoa(imageKeyToSave)}`;
       try {
-        const { data: encRes } = await supabase.rpc('encrypt_api_key', { plain_key: imageKeyToSave });
+        const { data: encRes } = await (supabase.rpc as any)('encrypt_api_key', { plain_key: imageKeyToSave });
         if (encRes) encryptedImageKey = encRes;
       } catch (_) {}
 
@@ -393,7 +393,7 @@ export const KobilLlmConfigView: React.FC = () => {
       // Also ensure mockDb internal map has the raw/encrypted key updated
       try {
         if (mockDb && mockDb.api_provider_settings) {
-          const chatProv = mockDb.api_provider_settings.get('prov-setting-chat');
+          const chatProv = mockDb.api_provider_settings.get('prov-setting-chat') as any;
           if (chatProv) {
             chatProv.provider_name = chatProvider;
             chatProv.base_url = chatBaseUrl.trim();
@@ -403,7 +403,7 @@ export const KobilLlmConfigView: React.FC = () => {
             mockDb.api_provider_settings.set('prov-setting-chat', { ...chatProv });
           }
 
-          const imgProv = mockDb.api_provider_settings.get('prov-setting-image');
+          const imgProv = mockDb.api_provider_settings.get('prov-setting-image') as any;
           if (imgProv) {
             imgProv.provider_name = imageProvider;
             imgProv.base_url = imageBaseUrl.trim();
@@ -417,7 +417,7 @@ export const KobilLlmConfigView: React.FC = () => {
 
       // Audit Log
       try {
-        await supabase.rpc('log_admin_action', {
+        await (supabase.rpc as any)('log_admin_action', {
           p_action: 'update_settings',
           p_action_type: 'update_settings',
           p_admin_id: user?.id || null,

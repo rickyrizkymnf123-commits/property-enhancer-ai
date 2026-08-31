@@ -535,7 +535,7 @@ describe('Admin Management Panel & Audit Logging Suite (Milestone 5 - R4)', () =
         ip_address: '127.0.0.1',
         details: { reason: 'Order verified' },
         created_at: new Date().toISOString(),
-      });
+      } as any);
 
       mockDb.admin_audit_logs.set('audit-2', {
         id: 'audit-2',
@@ -549,7 +549,7 @@ describe('Admin Management Panel & Audit Logging Suite (Milestone 5 - R4)', () =
         ip_address: '127.0.0.1',
         details: { from: 'lovable', to: 'openai' },
         created_at: new Date().toISOString(),
-      });
+      } as any);
     });
 
     it('should render audit log items and filter by action type', async () => {

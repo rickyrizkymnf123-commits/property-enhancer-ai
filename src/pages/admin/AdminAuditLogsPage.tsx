@@ -40,7 +40,7 @@ export const AdminAuditLogsPage: React.FC = () => {
       .subscribe();
 
     return () => {
-      supabase.removeChannel(channel);
+      supabase.removeChannel(channel as any);
     };
   }, [fetchAuditLogs]);
 

@@ -82,7 +82,7 @@ export const SettingsCms: React.FC = () => {
   // Helper for audit logs
   const logAudit = async (action: string, details: any) => {
     try {
-      await supabase.rpc('log_admin_action', {
+      await (supabase.rpc as any)('log_admin_action', {
         p_action: 'update_settings',
         p_action_type: 'update_settings',
         p_admin_id: user?.id || null,

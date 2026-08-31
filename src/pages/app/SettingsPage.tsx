@@ -144,7 +144,7 @@ export const SettingsPage: React.FC = () => {
 
     let encryptedKey = `enc_v1_${btoa(trimmedKey)}`;
     try {
-      const { data: encRes } = await supabase.rpc('encrypt_api_key', { plain_key: trimmedKey });
+      const { data: encRes } = await (supabase.rpc as any)('encrypt_api_key', { plain_key: trimmedKey });
       if (encRes) encryptedKey = encRes;
     } catch (_) {}
 

@@ -42,7 +42,7 @@ export const AdminUserTable: React.FC<AdminUserTableProps> = ({ users, onRefresh
   // Helper to log audit actions
   const logAudit = async (action: any, targetUserId: string, targetEmail: string, details: any) => {
     try {
-      await supabase.rpc('log_admin_action', {
+      await (supabase.rpc as any)('log_admin_action', {
         p_action: action,
         p_action_type: action,
         p_admin_id: currentAdmin?.id || null,

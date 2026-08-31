@@ -20,6 +20,9 @@ export interface ApiProviderConfig {
   id: string;
   provider_name: 'lovable' | 'openai' | 'gemini' | 'replicate' | string;
   model_name: string;
+  purpose?: string;
+  base_url?: string;
+  api_key_encrypted?: string;
   is_default: boolean;
   is_active: boolean;
   is_enabled?: boolean;

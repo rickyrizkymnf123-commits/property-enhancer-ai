@@ -239,6 +239,9 @@ export interface Database {
           id: string;
           provider_name: string;
           model_name: string;
+          purpose?: string;
+          base_url?: string;
+          api_key_encrypted?: string;
           is_default: boolean;
           is_active: boolean;
           config: Json;
@@ -250,6 +253,9 @@ export interface Database {
           id?: string;
           provider_name: string;
           model_name?: string;
+          purpose?: string;
+          base_url?: string;
+          api_key_encrypted?: string;
           is_default?: boolean;
           is_active?: boolean;
           config?: Json;
@@ -261,6 +267,9 @@ export interface Database {
           id?: string;
           provider_name?: string;
           model_name?: string;
+          purpose?: string;
+          base_url?: string;
+          api_key_encrypted?: string;
           is_default?: boolean;
           is_active?: boolean;
           config?: Json;
@@ -523,6 +532,7 @@ export interface Database {
           admin_id: string | null;
           admin_email: string | null;
           action_type: AdminActionType;
+          action?: string;
           target_user_id: string | null;
           target_resource: string | null;
           details: Json;
@@ -535,6 +545,7 @@ export interface Database {
           admin_id?: string | null;
           admin_email?: string | null;
           action_type: AdminActionType;
+          action?: string;
           target_user_id?: string | null;
           target_resource?: string | null;
           details?: Json;
@@ -595,3 +606,8 @@ export interface Database {
     };
   };
 }
+
+export type ImageRecord = Database['public']['Tables']['images']['Row'];
+export type ProfileRecord = Database['public']['Tables']['profiles']['Row'];
+export type EntitlementRecord = Database['public']['Tables']['entitlements']['Row'];
+

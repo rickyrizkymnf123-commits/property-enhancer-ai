@@ -274,7 +274,7 @@ export class MockDatabase {
       config: { gateway_url: 'https://gateway.lovable.ai/v1', timeout_seconds: 30 },
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
-    });
+    } as any);
 
     const provChat = 'prov-setting-chat';
     this.api_provider_settings.set(provChat, {
@@ -290,7 +290,7 @@ export class MockDatabase {
       config: {},
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
-    });
+    } as any);
 
     const provImage = 'prov-setting-image';
     this.api_provider_settings.set(provImage, {
@@ -306,7 +306,7 @@ export class MockDatabase {
       config: {},
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
-    });
+    } as any);
 
     const provOpenAI = 'prov-openai';
     this.api_provider_settings.set(provOpenAI, {
@@ -506,11 +506,12 @@ export class MockDatabase {
           'gpt-4o',
           'claude-3-5-sonnet',
           'deepseek-chat',
-          'imagen-3',
         ],
       },
+      description: 'Konfigurasi central Kobil LLM Proxy API',
+      created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
-    });
+    } as any);
   }
 }
 
@@ -1026,15 +1027,18 @@ export class MockFunctionsClient {
   }
 
   private async handleEnhanceImage(body: any, headers: Record<string, string>): Promise<{ data: any; error: any }> {
-    const authHeader = headers['Authorization'] || (this.currentSession ? `Bearer ${this.currentSession.access_token}` : null);
-    if (!authHeader) {
+    const authHeader = headers && ('Authorization' in headers || 'authorization' in headers)
+      ? (headers['Authorization'] || headers['authorization'])
+      : (this.currentSession ? `Bearer ${this.currentSession.access_token}` : null);
+
+    if (!authHeader || !authHeader.startsWith('Bearer ') || !authHeader.replace('Bearer ', '').trim()) {
       return { data: null, error: { message: 'Unauthorized', status: 401 } };
     }
 
     const headerToken = authHeader.replace('Bearer ', '').trim();
-    const userId = headerToken.startsWith('mock_jwt_')
+    const userId = (headerToken.startsWith('mock_jwt_')
       ? (this.currentSession?.user.id || headerToken)
-      : (headerToken || this.currentSession?.user.id);
+      : (headerToken || this.currentSession?.user.id)) || 'admin-user-0001-uuid';
     const userProfile = mockDb.profiles.get(userId);
     if (!userProfile && !mockDb.users.has(userId)) {
       return { data: null, error: { message: 'User not found', status: 401 } };
@@ -1086,9 +1090,9 @@ export class MockFunctionsClient {
 
     // 3. Resolve Provider Config for purpose='image_generation'
     let imageProviderSetting = Array.from(mockDb.api_provider_settings.values()).find(
-      (p) => p.purpose === 'image_generation' && p.is_default && p.is_active
+      (p: any) => p.purpose === 'image_generation' && p.is_default && p.is_active
     ) || Array.from(mockDb.api_provider_settings.values()).find(
-      (p) => p.purpose === 'image_generation' && (p.is_active || p.is_default)
+      (p: any) => p.purpose === 'image_generation' && (p.is_active || p.is_default)
     );
 
     if (!imageProviderSetting) {
@@ -1103,10 +1107,12 @@ export class MockFunctionsClient {
     // AI Provider Error Simulation if flagged
     if (mockDb.aiProviderShouldFail) {
       // Refund consumed quota unit on provider failure
-      const ent = mockDb.entitlements.get(userId);
-      if (ent && ent.consumed_quota > 0) {
-        ent.consumed_quota -= 1;
-        mockDb.entitlements.set(userId, { ...ent });
+      if (userId) {
+        const ent = mockDb.entitlements.get(userId);
+        if (ent && ent.consumed_quota > 0) {
+          ent.consumed_quota -= 1;
+          mockDb.entitlements.set(userId, { ...ent });
+        }
       }
 
       newImage.status = 'failed';
@@ -1131,7 +1137,7 @@ export class MockFunctionsClient {
       const usageId = `usage-${Date.now()}`;
       mockDb.api_usage_logs.set(usageId, {
         id: usageId,
-        user_id: userId,
+        user_id: userId || null,
         image_id: imageId,
         provider: providerName,
         model: modelName,
@@ -1151,7 +1157,7 @@ export class MockFunctionsClient {
     const enhancedResultUrl = body.original_url || `images/${userId}/enhanced_${imageId}.webp`;
     newImage.status = 'done';
     newImage.enhanced_url = enhancedResultUrl;
-    newImage.metadata = {
+    (newImage as any).metadata = {
       provider: providerName,
       model: modelName,
       preset,
@@ -1173,7 +1179,7 @@ export class MockFunctionsClient {
     const usageId = `usage-${Date.now()}`;
     mockDb.api_usage_logs.set(usageId, {
       id: usageId,
-      user_id: userId,
+      user_id: userId || null,
       image_id: imageId,
       provider: providerName,
       model: modelName,
@@ -1369,8 +1375,8 @@ export class MockFunctionsClient {
       const userId = headerToken.startsWith('mock_jwt_')
         ? (this.currentSession?.user.id || headerToken)
         : (headerToken || this.currentSession?.user.id);
-      let userRole = mockDb.user_roles.get(userId);
-      if (!userRole) {
+      let userRole = userId ? mockDb.user_roles.get(userId) : null;
+      if (!userRole && userId) {
         for (const r of mockDb.user_roles.values()) {
           if (r.user_id === userId) {
             userRole = r;
@@ -1380,8 +1386,8 @@ export class MockFunctionsClient {
       }
       if (userRole && userRole.role === 'admin') {
         isAdmin = true;
-        adminId = userId;
-        adminEmail = mockDb.users.get(userId)?.email || 'admin@propertyenhancer.ai';
+        adminId = userId || null;
+        adminEmail = (userId && mockDb.users.get(userId)?.email) || 'admin@propertyenhancer.ai';
       }
     }
 

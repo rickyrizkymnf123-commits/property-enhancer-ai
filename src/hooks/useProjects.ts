@@ -36,14 +36,14 @@ export function useProjects() {
   const createProject = async (projectData: { name: string; description?: string | null; address?: string | null }) => {
     if (!user) return { data: null, error: new Error('Not authenticated') };
     try {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase
         .from('projects')
         .insert({
           user_id: user.id,
           name: projectData.name,
           description: projectData.description || null,
           address: projectData.address || null,
-        })
+        }) as any)
         .select()
         .single();
 
