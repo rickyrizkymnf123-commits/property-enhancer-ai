@@ -57,3 +57,8 @@
    - **Mock DB Storage Hydration**: Added auto-hydration in `mockDb.seedDefaults()` (`src/lib/mockSupabase.ts`) to read user-saved API keys from `localStorage` (`pea_ai_provider_config_v4`) upon browser refresh.
    - **Prevented Seed Overwrite**: Prevented initial default seed key (`sk-koboi-live-99887766554433221100`) from overwriting custom keys saved by Admin (`sk-h7LuYKHnA0cvX3BvjoHQEQ`) on refresh.
    - **Verified Build & Tests**: 100% test pass rate (340/340) and clean production build (`built in 2.34s`). Committed and pushed to GitHub commit `3f17233`.
+
+11. **Interactive Admin AI Studio Test Panel**:
+   - **Dedicated Admin Test Panel**: Added `"Pengujian Realtime AI Studio (Image Generation)"` section in `KobilLlmConfigView.tsx` right next to the Chat Test section.
+   - **Real-Time Verification**: Admin can upload or select sample property photos, write prompt instructions, trigger `enhance-image` processing, measure real HTTP latency in ms, stream usage logs to `api_usage_logs`, and view before/after slider results in real time.
+   - **Verified Build & Tests**: 100% test pass rate (340/340) and clean production build (`built in 2.38s`). Committed and pushed to GitHub commit `c8229ef`.
