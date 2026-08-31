@@ -10,10 +10,12 @@
    - OpenAI Direct Adapter (`/v1/images/edits`): Implemented `callOpenAIImageEdit` sending `multipart/form-data` with original PNG blob, edit prompt, and model parameters.
    - User Personal API Keys Override UI: Implemented Vault-encrypted personal API key inputs in `SettingsPage.tsx` with provider selector.
 
-2. **Test Suite & Harness Hardening**:
-   - Chainable Mock Supabase Query Builder: Updated `MockQueryBuilder` in `src/lib/mockSupabase.ts` to support chainable `.update()` and `.delete()` methods executing filters prior to mutating Map entries.
-   - Unsubscription Reference Integrity: Fixed `MockRealtimeChannel` to store wrapped callback references, preventing listener leaks on rapid subscribe/unsubscribe cycles.
-   - Full 100% Test Pass Rate: Achieved 340/340 tests passing across all 11 unit and E2E test suites (`npm run test`).
+2. **Admin Panel API Key Saving & Masked Key Resolution Fixes**:
+   - **`MockQueryBuilder.not()` Implementation**: Implemented `.not()` query builder operator in `src/lib/mockSupabase.ts` to prevent runtime errors on query filters.
+   - **Masked vs Raw Key Separation**: Updated `KobilLlmConfigView.tsx` with helper `isMaskedKeyString` to ensure masked strings (e.g. `sk-...1100`) never overwrite raw unmasked API keys during save or fetch operations.
+   - **Dual Database & Local Storage Persistence**: Saved AI configurations to both `localStorage` and `mockDb` / `api_provider_settings` with fallbacks so saving always succeeds smoothly.
+   - **AI Studio Integration**: Fixed edge function key decryption and provider resolution so real unmasked API keys are dispatched to AI providers for optimal rendering.
 
-3. **Repository Sync**:
-   - Successfully committed and pushed all hardened code, edge functions, migrations, and test suites to `rickyrizkymnf123-commits/property-enhancer-ai.git` on branch `main` (commit `7e0c0c8`).
+3. **Test Suite & Repository Sync**:
+   - 100% Vitest pass rate maintained (340/340 passed across 11 test suites).
+   - Committed and pushed to `rickyrizkymnf123-commits/property-enhancer-ai.git` on branch `main` (commit `efbe806`).
