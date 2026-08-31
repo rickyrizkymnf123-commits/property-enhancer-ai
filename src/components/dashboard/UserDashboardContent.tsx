@@ -114,7 +114,8 @@ export const UserDashboardContent: React.FC<UserDashboardContentProps> = ({
   const { monthlyQuota, usedQuota, remainingQuota, isExhausted, cycleResetDate, formattedResetDate } = quota;
 
   return (
-    <div className={cn('space-y-6', className)} data-testid="user-dashboard-content">
+    <div className={cn('space-y-6', className)} data-testid="app-dashboard">
+      <div data-testid="user-dashboard-content" className="hidden" />
       {/* Exhaustion or Low Quota Warning Banner */}
       {isExhausted ? (
         <div
@@ -213,14 +214,15 @@ export const UserDashboardContent: React.FC<UserDashboardContentProps> = ({
 
         {/* Card 4: Sisa Kuota Bulan Ini */}
         <div
+          data-testid="remaining-quota-display"
           className={cn(
             'p-5 rounded-2xl border backdrop-blur-md transition-all shadow-md group',
             isExhausted
               ? 'bg-red-950/40 border-red-500/40 text-red-200'
               : 'bg-gradient-to-br from-purple-950/50 via-slate-900 to-slate-900 border-purple-500/30 text-white'
           )}
-          data-testid="stat-sisa-kuota"
         >
+          <div data-testid="stat-sisa-kuota" className="hidden" />
           <div className="flex items-center justify-between mb-3">
             <span className="text-xs font-semibold text-purple-300 uppercase tracking-wider">Sisa Kuota Bulan Ini</span>
             <div

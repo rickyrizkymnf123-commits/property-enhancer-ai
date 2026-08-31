@@ -32,6 +32,7 @@ export function useRealtimeEnhancement(): UseRealtimeEnhancementReturn {
 
   // Sync state from an image record
   const syncImageRecord = useCallback((record: ImageRecord) => {
+    console.log('[DEBUG syncImageRecord]', record.id, record.status);
     setActiveImage(record);
     setStatus(record.status);
     if (record.original_url) setOriginalUrl(record.original_url);
@@ -41,7 +42,7 @@ export function useRealtimeEnhancement(): UseRealtimeEnhancementReturn {
 
   // Supabase Realtime Subscription on `images` table
   useEffect(() => {
-    if (!user) return;
+    if (!user?.id) return;
 
     const channel = supabase
       .channel(`user-images-realtime-${user.id}`)
@@ -57,11 +58,13 @@ export function useRealtimeEnhancement(): UseRealtimeEnhancementReturn {
           const newRecord = payload.new as ImageRecord;
           if (!newRecord) return;
 
-          if (activeImageIdRef.current && newRecord.id === activeImageIdRef.current) {
-            syncImageRecord(newRecord);
-          } else if (status === 'queued' || status === 'processing') {
+          if (!activeImageIdRef.current || activeImageIdRef.current === newRecord.id) {
             activeImageIdRef.current = newRecord.id;
-            syncImageRecord(newRecord);
+            setActiveImage(newRecord);
+            setStatus(newRecord.status);
+            if (newRecord.original_url) setOriginalUrl(newRecord.original_url);
+            if (newRecord.enhanced_url) setEnhancedUrl(newRecord.enhanced_url);
+            if (newRecord.error_message) setErrorMessage(newRecord.error_message);
           }
         }
       )
@@ -70,7 +73,7 @@ export function useRealtimeEnhancement(): UseRealtimeEnhancementReturn {
     return () => {
       channel.unsubscribe();
     };
-  }, [user, status, syncImageRecord]);
+  }, [user?.id]);
 
   const startEnhancement = async ({
     file,

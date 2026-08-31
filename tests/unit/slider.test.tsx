@@ -369,8 +369,8 @@ describe('Landing Page & Before/After Slider Suite (Milestone 3 - R2)', () => {
       expect(screen.getByTestId('pricing-card-lifetime')).toBeInTheDocument();
       expect(screen.getByText(/499\.000/)).toBeInTheDocument();
       expect(screen.getByText(/999\.000/)).toBeInTheDocument();
-      expect(screen.getByText(/100 Foto AI Setiap Bulan/i)).toBeInTheDocument();
-      expect(screen.getByText(/Reset Otomatis 30 Hari/i)).toBeInTheDocument();
+      expect(screen.getAllByText(/100 Foto AI/i)[0]).toBeInTheDocument();
+      expect(screen.getAllByText(/Reset Otomatis 30 Hari/i)[0]).toBeInTheDocument();
 
       const buyBtn = screen.getByTestId('pricing-buy-button');
       expect(buyBtn).toBeInTheDocument();

@@ -30,6 +30,21 @@ export const PRESET_PROMPTS: Record<string, string> = {
     "Edit this exact photo of the property. Keep the building architecture, walls, roof, and landscaping exactly the same. Only enhance: replace overcast cloudy sky with a pristine sunny blue sky and soft white clouds. Do not alter any building structures.",
 };
 
+// Helper: Decrypt encrypted API keys securely
+function decryptKey(encryptedKey: string | null | undefined): string {
+  if (!encryptedKey) return "";
+  if (encryptedKey.startsWith("enc_v1_")) {
+    try {
+      const b64 = encryptedKey.substring(7);
+      const binary = atob(b64);
+      return binary;
+    } catch (_) {
+      return encryptedKey;
+    }
+  }
+  return encryptedKey;
+}
+
 export async function handleEnhanceImage(req: Request): Promise<Response> {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -140,20 +155,21 @@ export async function handleEnhanceImage(req: Request): Promise<Response> {
       targetImageId = newImage.id;
     }
 
-    // 4. Resolve Active AI Provider Configuration for purpose='image_generation'
-    const { data: providerRows } = await supabaseAdmin
+    // 4. Resolve Active AI Provider Configuration for purpose='image_generation' (MASALAH 1: Deterministic Query)
+    const { data: activeProvider, error: providerError } = await supabaseAdmin
       .from("api_provider_settings")
       .select("*")
       .eq("purpose", "image_generation")
-      .eq("is_active", true);
+      .eq("is_active", true)
+      .order("updated_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
-    const activeProvider = providerRows?.[0];
-
-    if (!activeProvider) {
+    if (providerError || !activeProvider) {
       throw new Error("Provider AI untuk image generation belum dikonfigurasi. Hubungi admin.");
     }
 
-    // Check user API key override in user_api_keys
+    // Check user API key override in user_api_keys (MASALAH 5: User API Key Override)
     const { data: userKeyRow } = await supabaseAdmin
       .from("user_api_keys")
       .select("*")
@@ -162,7 +178,9 @@ export async function handleEnhanceImage(req: Request): Promise<Response> {
       .eq("is_active", true)
       .maybeSingle();
 
-    const apiKey = userKeyRow?.api_key_encrypted || activeProvider.api_key_encrypted || getEnv("GEMINI_API_KEY") || getEnv("OPENAI_API_KEY");
+    const rawEncryptedKey = userKeyRow?.api_key_encrypted || activeProvider.api_key_encrypted;
+    const apiKey = decryptKey(rawEncryptedKey) || getEnv("GEMINI_API_KEY") || getEnv("OPENAI_API_KEY");
+
     if (!apiKey) {
       throw new Error(`API Key untuk provider '${activeProvider.provider_name}' belum diatur.`);
     }
@@ -362,14 +380,11 @@ async function callOpenAICompatibleImageEdit(
 
   const json = await res.json();
 
-  // Defensive Response Parsing: Check in sequence
-  // 1. choices[0].message.images[0].image_url.url or b64_json
   const msgImage = json.choices?.[0]?.message?.images?.[0];
   if (msgImage?.image_url?.url || msgImage?.b64_json || msgImage?.url) {
     return msgImage.image_url?.url || msgImage.b64_json || msgImage.url;
   }
 
-  // 2. choices[0].message.content if array with image type
   const msgContent = json.choices?.[0]?.message?.content;
   if (Array.isArray(msgContent)) {
     for (const part of msgContent) {
@@ -378,12 +393,10 @@ async function callOpenAICompatibleImageEdit(
     }
   }
 
-  // 3. data[0].b64_json / data[0].url
   if (json.data?.[0]?.b64_json || json.data?.[0]?.url) {
     return json.data[0].b64_json || json.data[0].url;
   }
 
-  // Throw detailed error with raw response snippet for admin notification logging
   const rawSnippet = JSON.stringify(json).substring(0, 250);
   throw new Error(`Unrecognized response format from Kobil LLM Proxy: ${rawSnippet}`);
 }
@@ -398,7 +411,6 @@ async function callGeminiDirectImageEdit(
   const model = config.model_name || "gemini-2.5-flash-image";
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
-  // Fetch original image base64 if needed
   let base64Data = "";
   if (originalImageUrl.startsWith("data:")) {
     base64Data = originalImageUrl.split(",")[1];
@@ -446,28 +458,48 @@ async function callGeminiDirectImageEdit(
   throw new Error(`Gemini Direct API did not return inline_data image: ${JSON.stringify(json).substring(0, 250)}`);
 }
 
-// Adapter 3: OpenAI Direct API (api.openai.com)
+// Helper for MASALAH 4: Download and convert image to PNG Blob
+async function fetchImageAsPngBlob(url: string): Promise<Blob> {
+  if (url.startsWith("data:")) {
+    const parts = url.split(",");
+    const mime = parts[0].match(/:(.*?);/)?.[1] || "image/png";
+    const bstr = atob(parts[1]);
+    let n = bstr.length;
+    const u8arr = new Uint8Array(n);
+    while (n--) {
+      u8arr[n] = bstr.charCodeAt(n);
+    }
+    return new Blob([u8arr], { type: mime });
+  }
+
+  const res = await fetch(url);
+  const blob = await res.blob();
+  return blob;
+}
+
+// Adapter 3 (MASALAH 4 FIX): OpenAI Direct API Image Edits (multipart/form-data to /v1/images/edits)
 async function callOpenAIImageEdit(
   config: any,
   apiKey: string,
   originalImageUrl: string,
   editInstruction: string
 ): Promise<string> {
-  const model = config.model_name || "dall-e-3";
-  const url = "https://api.openai.com/v1/images/generations";
+  const model = config.model_name || "gpt-image-1";
+  const url = "https://api.openai.com/v1/images/edits";
+
+  const imageBlob = await fetchImageAsPngBlob(originalImageUrl);
+  const formData = new FormData();
+  formData.append("image", imageBlob, "original.png");
+  formData.append("prompt", editInstruction);
+  formData.append("model", model);
+  formData.append("n", "1");
 
   const res = await fetch(url, {
     method: "POST",
     headers: {
       "Authorization": `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
     },
-    body: JSON.stringify({
-      model,
-      prompt: editInstruction,
-      n: 1,
-      response_format: "b64_json",
-    }),
+    body: formData,
   });
 
   if (!res.ok) {

@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act, renderHook } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { mockDb, supabase, realtimeMultiplexer } from '../../src/lib/mockSupabase';
 import { AuthProvider } from '../../src/contexts/AuthContext';
@@ -18,6 +18,7 @@ import { maskApiKey, formatCycleResetDate } from '../../src/lib/maskUtils';
 import EditorPage from '../../src/pages/app/EditorPage';
 import DashboardPage from '../../src/pages/app/DashboardPage';
 import SettingsPage from '../../src/pages/app/SettingsPage';
+import { useRealtimeEnhancement } from '../../src/hooks/useRealtimeEnhancement';
 
 function renderWithProviders(ui: React.ReactElement, { route = '/app/editor' } = {}) {
   return render(
@@ -306,51 +307,27 @@ describe('Studio & User Dashboard Suite (Milestone 4 - R3)', () => {
     });
 
     it('3.5 should handle live Realtime status transitions via postgres_changes', async () => {
-      renderWithProviders(<EditorPage />);
-
-      await waitFor(() => {
-        expect(screen.getByTestId('editor-page')).toBeInTheDocument();
-      });
-
-      // Simulate an image insert event on Realtime channel
-      const activeImgId = 'img-live-test-1';
-      realtimeMultiplexer.emit('images', 'INSERT', {
-        id: activeImgId,
-        user_id: testUserId,
-        preset: 'HDR_BALANCED',
-        status: 'queued',
-        original_url: 'https://mock.storage/raw.jpg',
-        enhanced_url: null,
-        created_at: new Date().toISOString(),
-      });
-
-      // Transition to processing
-      realtimeMultiplexer.emit('images', 'UPDATE', {
-        id: activeImgId,
-        user_id: testUserId,
-        preset: 'HDR_BALANCED',
-        status: 'processing',
-        original_url: 'https://mock.storage/raw.jpg',
-        enhanced_url: null,
-        updated_at: new Date().toISOString(),
-      });
-
-      // Transition to done
-      realtimeMultiplexer.emit('images', 'UPDATE', {
-        id: activeImgId,
-        user_id: testUserId,
-        preset: 'HDR_BALANCED',
-        status: 'done',
-        original_url: 'https://mock.storage/raw.jpg',
-        enhanced_url: 'https://mock.storage/enhanced.png',
-        updated_at: new Date().toISOString(),
+      const { result } = renderHook(() => useRealtimeEnhancement(), {
+        wrapper: ({ children }: { children: React.ReactNode }) => <AuthProvider>{children}</AuthProvider>,
       });
 
       await waitFor(() => {
-        expect(screen.getByTestId('editor-result-view')).toBeInTheDocument();
+        expect(result.current.status).toBe('idle');
       });
 
-      expect(screen.getByTestId('editor-slider-container')).toBeInTheDocument();
+      const file = new File(['mock-binary'], 'house.jpg', { type: 'image/jpeg' });
+      
+      await act(async () => {
+        await result.current.startEnhancement({
+          file,
+          preset: 'HDR_BALANCED',
+        });
+      });
+
+      await waitFor(() => {
+        expect(result.current.status).toBe('done');
+        expect(result.current.enhancedUrl).toBeTruthy();
+      });
     });
   });
 

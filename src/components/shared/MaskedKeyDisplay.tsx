@@ -35,10 +35,10 @@ export const MaskedKeyDisplay: React.FC<MaskedKeyDisplayProps> = ({
     };
   }, [isRevealed, autoHideDurationMs]);
 
-  const handleCopy = async () => {
+  const handleCopy = () => {
     try {
       if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(apiKey);
+        navigator.clipboard.writeText(apiKey);
       }
     } catch (err) {
       console.error('Failed to copy key:', err);

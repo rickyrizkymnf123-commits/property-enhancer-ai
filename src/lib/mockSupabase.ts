@@ -262,14 +262,48 @@ export class MockDatabase {
 
   seedDefaults() {
     // Seed default AI providers
-    const provLovable = 'prov-default-lovable';
+    const provLovable = 'prov-lovable';
     this.api_provider_settings.set(provLovable, {
       id: provLovable,
+      purpose: 'image_generation',
       provider_name: 'lovable',
       is_default: true,
       is_enabled: true,
+      is_active: true,
       model_name: 'google/gemini-2.5-flash-image',
       config: { gateway_url: 'https://gateway.lovable.ai/v1', timeout_seconds: 30 },
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    });
+
+    const provChat = 'prov-setting-chat';
+    this.api_provider_settings.set(provChat, {
+      id: provChat,
+      purpose: 'chat',
+      provider_name: 'kobil_llm',
+      is_default: false,
+      is_enabled: true,
+      is_active: true,
+      base_url: 'https://api.koboiillm.com/v1',
+      model_name: 'gemini-2.5-flash',
+      api_key_encrypted: 'sk-koboi-live-99887766554433221100',
+      config: {},
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    });
+
+    const provImage = 'prov-setting-image';
+    this.api_provider_settings.set(provImage, {
+      id: provImage,
+      purpose: 'image_generation',
+      provider_name: 'kobil_llm',
+      is_default: false,
+      is_enabled: true,
+      is_active: true,
+      base_url: 'https://api.koboiillm.com/v1',
+      model_name: 'gemini-2.5-flash-image',
+      api_key_encrypted: 'sk-koboi-live-99887766554433221100',
+      config: {},
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     });
@@ -519,6 +553,10 @@ class RealtimeMultiplexer {
           const filterId = chan.split('id=eq.')[1];
           if (filterId !== newRecord.id) continue;
         }
+        if (chan.includes('user_id=eq.') && newRecord?.user_id) {
+          const filterUserId = chan.split('user_id=eq.')[1];
+          if (filterUserId !== newRecord.user_id) continue;
+        }
         for (const cb of listeners) {
           cb(payload);
         }
@@ -539,6 +577,8 @@ export class MockQueryBuilder {
   private offsetCount?: number;
   private isSingle = false;
   private isMaybeSingle = false;
+  private isDelete = false;
+  private updateValues: any = null;
   private currentUserId?: string;
 
   constructor(tableName: string, currentUserId?: string) {
@@ -658,43 +698,14 @@ export class MockQueryBuilder {
     return { data, error: null };
   }
 
-  async update(values: any): Promise<{ data: any; error: any }> {
-    const table = this.getTableMap();
-    if (!table) return { data: null, error: { message: `Table ${this.tableName} not found` } };
-
-    const matching: any[] = [];
-    for (const [id, record] of table.entries()) {
-      if (this.filters.every((f) => f(record))) {
-        const oldRecord = { ...record };
-        const updated = {
-          ...record,
-          ...values,
-          updated_at: new Date().toISOString(),
-        };
-        table.set(id, updated);
-        matching.push(updated);
-        realtimeMultiplexer.emit(this.tableName, 'UPDATE', updated, oldRecord);
-      }
-    }
-
-    const data = this.isSingle ? (matching[0] || null) : matching;
-    return { data, error: null };
+  update(values: any) {
+    this.updateValues = values;
+    return this;
   }
 
-  async delete(): Promise<{ data: any; error: any }> {
-    const table = this.getTableMap();
-    if (!table) return { data: null, error: { message: `Table ${this.tableName} not found` } };
-
-    const deleted: any[] = [];
-    for (const [id, record] of Array.from(table.entries())) {
-      if (this.filters.every((f) => f(record))) {
-        table.delete(id);
-        deleted.push(record);
-        realtimeMultiplexer.emit(this.tableName, 'DELETE', null, record);
-      }
-    }
-
-    return { data: deleted, error: null };
+  delete() {
+    this.isDelete = true;
+    return this;
   }
 
   async upsert(values: any | any[]): Promise<{ data: any; error: any }> {
@@ -745,6 +756,37 @@ export class MockQueryBuilder {
   private async execute(): Promise<{ data: any; error: any; count?: number }> {
     const table = this.getTableMap();
     if (!table) return { data: null, error: { message: `Table ${this.tableName} not found` } };
+
+    if (this.isDelete) {
+      const deleted: any[] = [];
+      for (const [id, record] of Array.from(table.entries())) {
+        if (this.filters.every((f) => f(record))) {
+          table.delete(id);
+          deleted.push(record);
+          realtimeMultiplexer.emit(this.tableName, 'DELETE', record, record);
+        }
+      }
+      return { data: deleted, error: null };
+    }
+
+    if (this.updateValues) {
+      const matching: any[] = [];
+      for (const [id, record] of Array.from(table.entries())) {
+        if (this.filters.every((f) => f(record))) {
+          const oldRecord = { ...record };
+          const updated = {
+            ...record,
+            ...this.updateValues,
+            updated_at: new Date().toISOString(),
+          };
+          table.set(id, updated);
+          matching.push(updated);
+          realtimeMultiplexer.emit(this.tableName, 'UPDATE', updated, oldRecord);
+        }
+      }
+      const data = this.isSingle || this.isMaybeSingle ? (matching[0] || null) : matching;
+      return { data, error: null };
+    }
 
     let results = Array.from(table.values()).filter((row) => this.filters.every((f) => f(row)));
 
@@ -797,31 +839,26 @@ export class MockQueryBuilder {
 // Channel wrapper for Supabase Realtime
 export class MockRealtimeChannel {
   private channelName: string;
-  private callbacks: Array<{ event: string; schema: string; table: string; filter?: string; cb: RealtimeCallback }> = [];
+  private callbacks: Array<{ table: string; event: string; filter?: string; cb: RealtimeCallback; wrappedCb?: RealtimeCallback }> = [];
 
   constructor(channelName: string) {
     this.channelName = channelName;
   }
 
-  on(type: 'postgres_changes', filterConfig: { event: string; schema: string; table: string; filter?: string }, callback: RealtimeCallback) {
-    this.callbacks.push({
-      event: filterConfig.event,
-      schema: filterConfig.schema,
-      table: filterConfig.table,
-      filter: filterConfig.filter,
-      cb: callback,
-    });
+  on(eventType: string, config: { event: string; schema?: string; table: string; filter?: string }, cb: RealtimeCallback) {
+    this.callbacks.push({ table: config.table, event: config.event || '*', filter: config.filter, cb });
     return this;
   }
 
-  subscribe(statusCallback?: (status: 'SUBSCRIBED' | 'CHANNEL_ERROR') => void) {
+  subscribe(statusCallback?: (status: string) => void) {
     for (const item of this.callbacks) {
       const channelKey = item.filter ? `${item.table}:${item.filter}` : `public:${item.table}`;
-      realtimeMultiplexer.subscribe(channelKey, (payload) => {
+      item.wrappedCb = (payload) => {
         if (item.event === '*' || item.event === payload.eventType) {
           item.cb(payload);
         }
-      });
+      };
+      realtimeMultiplexer.subscribe(channelKey, item.wrappedCb);
     }
     if (statusCallback) {
       setTimeout(() => statusCallback('SUBSCRIBED'), 1);
@@ -832,7 +869,9 @@ export class MockRealtimeChannel {
   unsubscribe() {
     for (const item of this.callbacks) {
       const channelKey = item.filter ? `${item.table}:${item.filter}` : `public:${item.table}`;
-      realtimeMultiplexer.unsubscribe(channelKey, item.cb);
+      if (item.wrappedCb) {
+        realtimeMultiplexer.unsubscribe(channelKey, item.wrappedCb);
+      }
     }
     return Promise.resolve();
   }
@@ -951,9 +990,19 @@ export class MockFunctionsClient {
       return this.handleProvision(body, headers);
     } else if (functionName === 'admin-users') {
       return this.handleAdminUsers(body, headers);
+    } else if (functionName === 'list-ai-models') {
+      return this.handleListModels(body, headers);
     }
 
     return { data: null, error: { message: `Function ${functionName} not found`, status: 404 } };
+  }
+
+  private async handleListModels(body: any, headers: Record<string, string>): Promise<{ data: any; error: any }> {
+    const purpose = body.purpose || 'chat';
+    const models = purpose === 'image_generation'
+      ? ['gemini-2.5-flash-image', 'gemini-2.5-flash-image-preview', 'gpt-image-1', 'imagen-3', 'kobil-image-v1']
+      : ['gemini-2.5-flash', 'gemini-2.0-flash', 'gpt-4o-mini', 'gpt-4o', 'claude-3-5-sonnet', 'deepseek-chat'];
+    return { data: { success: true, models }, error: null };
   }
 
   private async handleEnhanceImage(body: any, headers: Record<string, string>): Promise<{ data: any; error: any }> {
@@ -962,7 +1011,10 @@ export class MockFunctionsClient {
       return { data: null, error: { message: 'Unauthorized', status: 401 } };
     }
 
-    const userId = this.currentSession?.user.id || authHeader.replace('Bearer ', '');
+    const headerToken = authHeader.replace('Bearer ', '').trim();
+    const userId = headerToken.startsWith('mock_jwt_')
+      ? (this.currentSession?.user.id || headerToken)
+      : (headerToken || this.currentSession?.user.id);
     const userProfile = mockDb.profiles.get(userId);
     if (!userProfile && !mockDb.users.has(userId)) {
       return { data: null, error: { message: 'User not found', status: 401 } };
@@ -1014,6 +1066,8 @@ export class MockFunctionsClient {
 
     // 3. Resolve Provider Config for purpose='image_generation'
     let imageProviderSetting = Array.from(mockDb.api_provider_settings.values()).find(
+      (p) => p.purpose === 'image_generation' && p.is_default && p.is_active
+    ) || Array.from(mockDb.api_provider_settings.values()).find(
       (p) => p.purpose === 'image_generation' && (p.is_active || p.is_default)
     );
 
@@ -1028,6 +1082,13 @@ export class MockFunctionsClient {
 
     // AI Provider Error Simulation if flagged
     if (mockDb.aiProviderShouldFail) {
+      // Refund consumed quota unit on provider failure
+      const ent = mockDb.entitlements.get(userId);
+      if (ent && ent.consumed_quota > 0) {
+        ent.consumed_quota -= 1;
+        mockDb.entitlements.set(userId, { ...ent });
+      }
+
       newImage.status = 'failed';
       newImage.error_message = mockDb.aiProviderErrorMessage;
       newImage.updated_at = new Date().toISOString();
@@ -1038,7 +1099,7 @@ export class MockFunctionsClient {
       const notifId = `notif-${Date.now()}`;
       mockDb.admin_notifications.set(notifId, {
         id: notifId,
-        title: `AI Provider Failure (${providerName})`,
+        title: 'AI Provider Failure',
         message: `Failed to enhance image ${imageId}: ${mockDb.aiProviderErrorMessage}`,
         severity: 'critical',
         is_read: false,
@@ -1077,6 +1138,15 @@ export class MockFunctionsClient {
     };
     newImage.updated_at = new Date().toISOString();
     mockDb.images.set(imageId, { ...newImage });
+    
+    // Upload enhanced image to storage
+    let imgBucket = mockDb.storage.get('images');
+    if (!imgBucket) {
+      imgBucket = new Map();
+      mockDb.storage.set('images', imgBucket);
+    }
+    imgBucket.set(enhancedResultUrl, { buffer: 'mock_enhanced_png_data', contentType: 'image/webp' });
+
     realtimeMultiplexer.emit('images', 'UPDATE', { ...newImage });
 
     // Log success usage
@@ -1096,6 +1166,7 @@ export class MockFunctionsClient {
     return {
       data: {
         success: true,
+        imageId: imageId,
         image_id: imageId,
         status: 'done',
         enhanced_url: enhancedResultUrl,
@@ -1128,7 +1199,7 @@ export class MockFunctionsClient {
     }
 
     if (isDuplicate) {
-      const logId = `prov-log-${Date.now()}`;
+      const logId = `prov-log-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
       mockDb.provision_logs.set(logId, {
         id: logId,
         email,
@@ -1191,7 +1262,7 @@ export class MockFunctionsClient {
 
     // WhatsApp WAHA Dispatch
     if (mockDb.wahaShouldFail) {
-      const logId = `prov-log-${Date.now()}`;
+      const logId = `prov-log-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
       mockDb.provision_logs.set(logId, {
         id: logId,
         email,
@@ -1227,7 +1298,7 @@ export class MockFunctionsClient {
     }
 
     // WAHA Succeeded
-    const logId = `prov-log-${Date.now()}`;
+    const logId = `prov-log-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
     mockDb.provision_logs.set(logId, {
       id: logId,
       email,
@@ -1274,8 +1345,19 @@ export class MockFunctionsClient {
       isAdmin = true;
       adminEmail = 'setup_secret_root';
     } else if (authHeader) {
-      const userId = this.currentSession?.user.id || authHeader.replace('Bearer ', '');
-      const userRole = mockDb.user_roles.get(userId);
+      const headerToken = authHeader.replace('Bearer ', '').trim();
+      const userId = headerToken.startsWith('mock_jwt_')
+        ? (this.currentSession?.user.id || headerToken)
+        : (headerToken || this.currentSession?.user.id);
+      let userRole = mockDb.user_roles.get(userId);
+      if (!userRole) {
+        for (const r of mockDb.user_roles.values()) {
+          if (r.user_id === userId) {
+            userRole = r;
+            break;
+          }
+        }
+      }
       if (userRole && userRole.role === 'admin') {
         isAdmin = true;
         adminId = userId;
@@ -1308,22 +1390,34 @@ export class MockFunctionsClient {
     }
 
     if (action === 'approve') {
-      const ent = mockDb.entitlements.get(targetId);
+      let ent = mockDb.entitlements.get(targetId);
+      if (!ent) {
+        for (const item of mockDb.entitlements.values()) {
+          if (item.user_id === targetId) { ent = item; break; }
+        }
+      }
       if (!ent) return { data: null, error: { message: 'Entitlement not found', status: 404 } };
       ent.status = 'active';
       ent.updated_at = new Date().toISOString();
-      mockDb.entitlements.set(targetId, ent);
+      mockDb.entitlements.set(ent.id, ent);
+      mockDb.entitlements.set(ent.user_id, ent);
 
       await logAdminAudit(adminId, adminEmail, 'approve_user', targetId, mockDb.profiles.get(targetId)?.email || null, { action: 'approve' });
       return { data: { success: true, message: 'User approved' }, error: null };
     }
 
     if (action === 'reject') {
-      const ent = mockDb.entitlements.get(targetId);
+      let ent = mockDb.entitlements.get(targetId);
+      if (!ent) {
+        for (const item of mockDb.entitlements.values()) {
+          if (item.user_id === targetId) { ent = item; break; }
+        }
+      }
       if (!ent) return { data: null, error: { message: 'Entitlement not found', status: 404 } };
       ent.status = 'suspended';
       ent.updated_at = new Date().toISOString();
-      mockDb.entitlements.set(targetId, ent);
+      mockDb.entitlements.set(ent.id, ent);
+      mockDb.entitlements.set(ent.user_id, ent);
 
       await logAdminAudit(adminId, adminEmail, 'reject_user', targetId, mockDb.profiles.get(targetId)?.email || null, { action: 'reject' });
       return { data: { success: true, message: 'User suspended' }, error: null };
@@ -1382,8 +1476,21 @@ export class MockFunctionsClient {
 }
 
 // SECURITY DEFINER RPC Functions
-export async function executeCheckAndConsumeQuota(userId: string): Promise<{ allowed: boolean; remaining?: number; reset_date?: string; error?: string }> {
-  const ent = mockDb.entitlements.get(userId);
+export function executeCheckAndConsumeQuota(userId: string): {
+  allowed: boolean;
+  remaining?: number;
+  reset_date?: string;
+  error?: string;
+} {
+  let ent = mockDb.entitlements.get(userId);
+  if (!ent) {
+    for (const item of mockDb.entitlements.values()) {
+      if (item.user_id === userId && item.product_code === 'PEA') {
+        ent = item;
+        break;
+      }
+    }
+  }
   if (!ent || ent.product_code !== 'PEA') {
     return { allowed: false, error: 'No PEA entitlement found' };
   }
@@ -1401,7 +1508,8 @@ export async function executeCheckAndConsumeQuota(userId: string): Promise<{ all
     ent.cycle_start_date = now.toISOString();
     ent.cycle_reset_date = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
     ent.updated_at = now.toISOString();
-    mockDb.entitlements.set(userId, { ...ent });
+    mockDb.entitlements.set(ent.id, { ...ent });
+    mockDb.entitlements.set(ent.user_id, { ...ent });
   }
 
   const remaining = ent.monthly_quota - ent.consumed_quota;
@@ -1417,7 +1525,8 @@ export async function executeCheckAndConsumeQuota(userId: string): Promise<{ all
   // Consume 1 quota unit
   ent.consumed_quota += 1;
   ent.updated_at = new Date().toISOString();
-  mockDb.entitlements.set(userId, { ...ent });
+  mockDb.entitlements.set(ent.id, { ...ent });
+  mockDb.entitlements.set(ent.user_id, { ...ent });
 
   return {
     allowed: true,
@@ -1461,9 +1570,8 @@ export async function logAdminAudit(
 // Simple deterministic HMAC SHA-256 validator for testing
 export function validateHmacSignature(payload: string, signature: string, secret: string): boolean {
   if (!signature || !secret) return false;
-  // Compute expected signature using synchronous hash simulator or check if signature equals mock expected
   const expected = computeMockHmac(payload, secret);
-  return signature === expected || signature.startsWith('mock_sig_') || signature.length === 64;
+  return signature === expected || signature === 'mock_valid_signature' || signature === `mock_sig_${secret}`;
 }
 
 export function computeMockHmac(payload: string, secret: string): string {
@@ -1769,6 +1877,22 @@ export class MockSupabaseClient {
   }
 
   async rpc(functionName: string, params: Record<string, any> = {}): Promise<{ data: any; error: any }> {
+    if (functionName === 'encrypt_api_key') {
+      const plainKey = params.plain_key || params.plain_text || '';
+      const encrypted = `enc_v1_${btoa(plainKey)}`;
+      return { data: encrypted, error: null };
+    }
+
+    if (functionName === 'decrypt_api_key') {
+      const encKey = params.encrypted_key || '';
+      if (encKey.startsWith('enc_v1_')) {
+        try {
+          return { data: atob(encKey.substring(7)), error: null };
+        } catch (_) {}
+      }
+      return { data: encKey, error: null };
+    }
+
     if (functionName === 'check_and_consume_quota') {
       const result = await executeCheckAndConsumeQuota(params.p_user_id || this.currentSession?.user.id);
       return { data: result, error: null };

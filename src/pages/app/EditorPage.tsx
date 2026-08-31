@@ -3,7 +3,7 @@ import AppSidebar from '../../components/shared/AppSidebar';
 import Header from '../../components/shared/Header';
 import PhotoUploader from '../../components/studio/PhotoUploader';
 import PromptInput from '../../components/studio/PromptInput';
-import RealtimeStatusBadge from '../../components/studio/RealtimeStatusBadge';
+import { RealtimeStatusBadge } from '../../components/studio/RealtimeStatusBadge';
 import BeforeAfterSlider from '../../components/studio/BeforeAfterSlider';
 import ImageZoomViewer from '../../components/studio/ImageZoomViewer';
 import { useRealtimeEnhancement } from '../../hooks/useRealtimeEnhancement';

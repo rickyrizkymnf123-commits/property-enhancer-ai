@@ -237,6 +237,9 @@ describe('Tier 3: Pairwise Cross-Feature Combinations Test Suite (20 Tests)', ()
     const notifs = Array.from(mockDb.admin_notifications.values());
     const critAlert = notifs.find((n) => n.severity === 'critical' && n.title === 'AI Provider Failure');
     expect(critAlert).toBeDefined();
+
+    // Reset flag for subsequent tests
+    mockDb.aiProviderShouldFail = false;
   });
 
   // =========================================================================

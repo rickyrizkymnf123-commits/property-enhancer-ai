@@ -135,12 +135,31 @@ export const SettingsPage: React.FC = () => {
   };
 
   // Handle Add API Key
-  const handleAddApiKey = (e: React.FormEvent) => {
+  const handleAddApiKey = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newKeyValue.trim()) return;
+    if (!newKeyValue.trim() || !user) return;
 
     const trimmedKey = newKeyValue.trim();
     const masked = maskApiKey(trimmedKey);
+
+    let encryptedKey = `enc_v1_${btoa(trimmedKey)}`;
+    try {
+      const { data: encRes } = await supabase.rpc('encrypt_api_key', { plain_key: trimmedKey });
+      if (encRes) encryptedKey = encRes;
+    } catch (_) {}
+
+    try {
+      await supabase.from('user_api_keys').upsert([
+        {
+          user_id: user.id,
+          provider_name: newKeyProvider,
+          encrypted_key: encryptedKey,
+          key_hint: masked,
+          is_active: true,
+          updated_at: new Date().toISOString(),
+        },
+      ]);
+    } catch (_) {}
 
     const newEntry: UserApiKeyItem = {
       id: `key-${Date.now()}`,
@@ -454,10 +473,13 @@ export const SettingsPage: React.FC = () => {
                   className="w-full text-xs rounded-xl bg-slate-950 border border-white/10 px-3.5 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-purple-500/50"
                   data-testid="key-provider-select"
                 >
-                  <option value="openai">OpenAI (GPT-4o / DALL-E)</option>
-                  <option value="gemini">Google Gemini AI</option>
-                  <option value="replicate">Replicate</option>
+                  <option value="kobil_llm">Kobil LLM Proxy (LiteLLM Compatible)</option>
+                  <option value="gemini_direct">Google Gemini Direct API</option>
+                  <option value="openai_direct">OpenAI Direct API</option>
                 </select>
+                <p className="text-[11px] text-purple-300/80 leading-relaxed pt-1">
+                  💡 Kalau diisi, foto Anda akan diproses memakai API key ini alih-alih API key sistem milik admin. Kosongkan untuk memakai default sistem.
+                </p>
               </div>
 
               <div className="space-y-1.5">

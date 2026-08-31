@@ -385,7 +385,14 @@ describe('Authentication & Entitlement Access Control (Milestone 2 - R1)', () =>
       });
     });
 
-    it('should submit password update on ResetPasswordPage', async () => {
+    it('should successfully submit password reset form with matching passwords', async () => {
+      const resetUser = { id: 'test-reset-user-id', email: 'testreset@example.com', password: 'OldPassword123!', created_at: new Date().toISOString() };
+      mockDb.users.set(resetUser.id, resetUser);
+      supabase.setMockSession({
+        user: resetUser,
+        access_token: 'mock-token',
+      } as any);
+
       renderWithProviders(<ResetPasswordPage />, { route: '/reset-password' });
 
       expect(screen.getByRole('heading', { name: /atur ulang kata sandi/i })).toBeInTheDocument();

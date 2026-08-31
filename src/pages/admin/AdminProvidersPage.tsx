@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { supabase } from '../../lib/supabase';
 import { AdminLayout } from '../../components/admin/AdminLayout';
 import { KobilLlmConfigView } from '../../components/admin/KobilLlmConfigView';
 import { ApiProviderSwitch } from '../../components/admin/ApiProviderSwitch';
@@ -6,6 +7,16 @@ import { Bot, Cpu, Sparkles, SlidersHorizontal } from 'lucide-react';
 
 export const AdminProvidersPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'kobil' | 'gateway'>('kobil');
+  const [providers, setProviders] = useState<ApiProviderConfig[]>([]);
+
+  const fetchProviders = async () => {
+    const { data } = await supabase.from('api_provider_settings').select('*');
+    if (data) setProviders(data as ApiProviderConfig[]);
+  };
+
+  React.useEffect(() => {
+    fetchProviders();
+  }, []);
 
   return (
     <AdminLayout
@@ -43,7 +54,7 @@ export const AdminProvidersPage: React.FC = () => {
         {activeTab === 'kobil' ? (
           <KobilLlmConfigView />
         ) : (
-          <ApiProviderSwitch providers={[]} onProviderChanged={() => {}} />
+          <ApiProviderSwitch providers={providers} onProviderChanged={fetchProviders} />
         )}
       </div>
     </AdminLayout>

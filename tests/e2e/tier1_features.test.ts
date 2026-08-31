@@ -322,6 +322,7 @@ describe('Tier 1: Feature Isolation Test Suite (19 Features x 5 Tests = 95 Tests
     });
 
     it('4.4: Password update fails when unauthenticated', async () => {
+      await supabase.auth.signOut();
       const { error } = await supabase.auth.updateUser({ password: 'NewPassword!' });
       expect(error).toBeDefined();
       expect(error.status).toBe(401);

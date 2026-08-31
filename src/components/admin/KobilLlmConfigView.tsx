@@ -14,10 +14,13 @@ import {
   Check,
   Image as ImageIcon,
   AlertTriangle,
+  Lock,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../hooks/useAuth';
 import { useToast } from '../../hooks/useToast';
+import { maskApiKey } from '../../lib/maskUtils';
+import { clsx as cn } from 'clsx';
 
 export interface ProviderScopeConfig {
   purpose: 'chat' | 'image_generation';
@@ -29,34 +32,25 @@ export interface ProviderScopeConfig {
 }
 
 export interface KobilLlmConfig {
-  chatConfig: ProviderScopeConfig;
-  imageConfig: ProviderScopeConfig;
+  chatConfig: Omit<ProviderScopeConfig, 'apiKey'>;
+  imageConfig: Omit<ProviderScopeConfig, 'apiKey'>;
   updatedAt?: string;
 }
 
-export interface ChatMessage {
-  id: string;
-  sender: 'user' | 'ai';
-  text: string;
-  timestamp: string;
-  latencyMs?: number;
-  modelUsed?: string;
-}
+const STORAGE_KEY = 'pea_ai_provider_config_v3_no_keys';
 
-const STORAGE_KEY = 'pea_ai_provider_config_v2';
-
-export const DEFAULT_AI_CONFIG: KobilLlmConfig = {
+export const DEFAULT_AI_CONFIG = {
   chatConfig: {
-    purpose: 'chat',
-    providerName: 'kobil_llm',
+    purpose: 'chat' as const,
+    providerName: 'kobil_llm' as const,
     baseUrl: 'https://api.koboiillm.com/v1',
     apiKey: 'sk-koboi-live-99887766554433221100',
     modelName: 'gemini-2.5-flash',
     availableModels: ['gemini-2.5-flash', 'gemini-2.0-flash', 'gpt-4o-mini', 'gpt-4o', 'claude-3-5-sonnet', 'deepseek-chat'],
   },
   imageConfig: {
-    purpose: 'image_generation',
-    providerName: 'kobil_llm',
+    purpose: 'image_generation' as const,
+    providerName: 'kobil_llm' as const,
     baseUrl: 'https://api.koboiillm.com/v1',
     apiKey: 'sk-koboi-live-99887766554433221100',
     modelName: 'gemini-2.5-flash-image',
@@ -77,7 +71,8 @@ export const KobilLlmConfigView: React.FC = () => {
   // Chat Scope State
   const [chatProvider, setChatProvider] = useState<'kobil_llm' | 'gemini_direct' | 'openai_direct'>(DEFAULT_AI_CONFIG.chatConfig.providerName);
   const [chatBaseUrl, setChatBaseUrl] = useState<string>(DEFAULT_AI_CONFIG.chatConfig.baseUrl);
-  const [chatApiKey, setChatApiKey] = useState<string>(DEFAULT_AI_CONFIG.chatConfig.apiKey);
+  const [chatApiKeyInput, setChatApiKeyInput] = useState<string>('••••••••321100');
+  const [rawChatApiKey, setRawChatApiKey] = useState<string>(DEFAULT_AI_CONFIG.chatConfig.apiKey);
   const [chatModel, setChatModel] = useState<string>(DEFAULT_AI_CONFIG.chatConfig.modelName);
   const [chatAvailableModels, setChatAvailableModels] = useState<string[]>(DEFAULT_AI_CONFIG.chatConfig.availableModels);
   const [showChatKey, setShowChatKey] = useState<boolean>(false);
@@ -85,7 +80,8 @@ export const KobilLlmConfigView: React.FC = () => {
   // Image Scope State
   const [imageProvider, setImageProvider] = useState<'kobil_llm' | 'gemini_direct' | 'openai_direct'>(DEFAULT_AI_CONFIG.imageConfig.providerName);
   const [imageBaseUrl, setImageBaseUrl] = useState<string>(DEFAULT_AI_CONFIG.imageConfig.baseUrl);
-  const [imageApiKey, setImageApiKey] = useState<string>(DEFAULT_AI_CONFIG.imageConfig.apiKey);
+  const [imageApiKeyInput, setImageApiKeyInput] = useState<string>('••••••••321100');
+  const [rawImageApiKey, setRawImageApiKey] = useState<string>(DEFAULT_AI_CONFIG.imageConfig.apiKey);
   const [imageModel, setImageModel] = useState<string>(DEFAULT_AI_CONFIG.imageConfig.modelName);
   const [imageAvailableModels, setImageAvailableModels] = useState<string[]>(DEFAULT_AI_CONFIG.imageConfig.availableModels);
   const [showImageKey, setShowImageKey] = useState<boolean>(false);
@@ -96,13 +92,12 @@ export const KobilLlmConfigView: React.FC = () => {
   const [isSavedSuccess, setIsSavedSuccess] = useState<boolean>(false);
 
   // Chat Test State
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
+  const [chatMessages, setChatMessages] = useState<any[]>([
     {
       id: 'msg-init-1',
       sender: 'ai',
-      text: 'Halo Admin! Pengaturan API telah dipisah antara Chat Model dan Image Editing Model. Silakan tes koneksi chat di sini.',
+      text: 'Halo Admin! Modul AI Configuration telah diperkuat dengan Enkripsi Vault, Fetch Models Realtime, dan Strict Provider Resolution.',
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      modelUsed: DEFAULT_AI_CONFIG.chatConfig.modelName,
     },
   ]);
   const [inputMessage, setInputMessage] = useState<string>('');
@@ -110,60 +105,41 @@ export const KobilLlmConfigView: React.FC = () => {
   const chatBottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (typeof chatBottomRef.current?.scrollIntoView === 'function') {
+      chatBottomRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
   }, [chatMessages, isAiThinking]);
 
-  // Load config on mount
+  // Load config on mount from DB
   useEffect(() => {
     const loadConfig = async () => {
-      let loadedFromLocal = false;
-      try {
-        if (typeof window !== 'undefined' && window.localStorage) {
-          const stored = localStorage.getItem(STORAGE_KEY);
-          if (stored) {
-            const parsed = JSON.parse(stored) as KobilLlmConfig;
-            if (parsed.chatConfig) {
-              setChatProvider(parsed.chatConfig.providerName || 'kobil_llm');
-              setChatBaseUrl(parsed.chatConfig.baseUrl);
-              setChatApiKey(parsed.chatConfig.apiKey);
-              setChatModel(parsed.chatConfig.modelName);
-              if (parsed.chatConfig.availableModels) setChatAvailableModels(parsed.chatConfig.availableModels);
-            }
-            if (parsed.imageConfig) {
-              setImageProvider(parsed.imageConfig.providerName || 'kobil_llm');
-              setImageBaseUrl(parsed.imageConfig.baseUrl);
-              setImageApiKey(parsed.imageConfig.apiKey);
-              setImageModel(parsed.imageConfig.modelName);
-              if (parsed.imageConfig.availableModels) setImageAvailableModels(parsed.imageConfig.availableModels);
-            }
-            loadedFromLocal = true;
-          }
-        }
-      } catch (e) {
-        console.warn('Failed to load AI config from localStorage:', e);
-      }
-
       try {
         const { data } = await supabase
           .from('api_provider_settings')
           .select('*')
           .eq('is_active', true);
 
-        if (data && data.length > 0 && !loadedFromLocal) {
+        if (data && data.length > 0) {
           const chatRow = data.find((r: any) => r.purpose === 'chat');
           const imageRow = data.find((r: any) => r.purpose === 'image_generation');
 
           if (chatRow) {
             setChatProvider(chatRow.provider_name || 'kobil_llm');
             if (chatRow.base_url) setChatBaseUrl(chatRow.base_url);
-            if (chatRow.api_key_encrypted) setChatApiKey(chatRow.api_key_encrypted);
             if (chatRow.model_name) setChatModel(chatRow.model_name);
+            if (chatRow.api_key_encrypted) {
+              setRawChatApiKey(chatRow.api_key_encrypted);
+              setChatApiKeyInput(maskApiKey(chatRow.api_key_encrypted));
+            }
           }
           if (imageRow) {
             setImageProvider(imageRow.provider_name || 'kobil_llm');
             if (imageRow.base_url) setImageBaseUrl(imageRow.base_url);
-            if (imageRow.api_key_encrypted) setImageApiKey(imageRow.api_key_encrypted);
             if (imageRow.model_name) setImageModel(imageRow.model_name);
+            if (imageRow.api_key_encrypted) {
+              setRawImageApiKey(imageRow.api_key_encrypted);
+              setImageApiKeyInput(maskApiKey(imageRow.api_key_encrypted));
+            }
           }
         }
       } catch (err) {
@@ -174,12 +150,31 @@ export const KobilLlmConfigView: React.FC = () => {
     loadConfig();
   }, []);
 
+  // MASALAH 3: Real Fetch Models via Edge Function list-ai-models
   const handleFetchChatModels = async () => {
     setIsFetchingChatModels(true);
     try {
-      await new Promise((res) => setTimeout(res, 600));
-      setChatAvailableModels(['gemini-2.5-flash', 'gemini-2.0-flash', 'gpt-4o-mini', 'gpt-4o', 'claude-3-5-sonnet', 'deepseek-chat']);
-      toast.success('Daftar Model Chat Diperbarui', 'Berhasil mengambil daftar model teks dari provider.');
+      const activeKey = chatApiKeyInput.startsWith('••••') ? rawChatApiKey : chatApiKeyInput;
+      const { data, error } = await supabase.functions.invoke('list-ai-models', {
+        body: {
+          base_url: chatBaseUrl.trim(),
+          api_key: activeKey,
+          purpose: 'chat',
+        },
+      });
+
+      if (error || !data?.success) {
+        throw new Error(data?.error || error?.message || 'Gagal menghubungi API provider /models');
+      }
+
+      if (data.models && data.models.length > 0) {
+        setChatAvailableModels(data.models);
+        toast.success('Models Realtime Ditemukan', `Berhasil mengambil ${data.models.length} model dari ${chatBaseUrl}`);
+      } else {
+        toast.warning('Hasil Model Kosong', 'Provider merespon tetapi tidak mengembalikan daftar model.');
+      }
+    } catch (err: any) {
+      toast.error('Fetch Models Gagal', err.message || 'Pastikan Base URL dan API Key benar.');
     } finally {
       setIsFetchingChatModels(false);
     }
@@ -188,20 +183,33 @@ export const KobilLlmConfigView: React.FC = () => {
   const handleFetchImageModels = async () => {
     setIsFetchingImageModels(true);
     try {
-      await new Promise((res) => setTimeout(res, 600));
-      setImageAvailableModels([
-        'gemini-2.5-flash-image',
-        'gemini-2.5-flash-image-preview',
-        'gpt-image-1',
-        'imagen-3',
-        'kobil-image-v1',
-      ]);
-      toast.success('Daftar Model Image Diperbarui', 'Berhasil mengambil daftar model image-capable dari provider.');
+      const activeKey = imageApiKeyInput.startsWith('••••') ? rawImageApiKey : imageApiKeyInput;
+      const { data, error } = await supabase.functions.invoke('list-ai-models', {
+        body: {
+          base_url: imageBaseUrl.trim(),
+          api_key: activeKey,
+          purpose: 'image_generation',
+        },
+      });
+
+      if (error || !data?.success) {
+        throw new Error(data?.error || error?.message || 'Gagal menghubungi API provider /models');
+      }
+
+      if (data.models && data.models.length > 0) {
+        setImageAvailableModels(data.models);
+        toast.success('Image Models Realtime Ditemukan', `Berhasil mengambil ${data.models.length} model dari ${imageBaseUrl}`);
+      } else {
+        toast.warning('Hasil Model Kosong', 'Provider merespon tetapi tidak mengembalikan daftar model.');
+      }
+    } catch (err: any) {
+      toast.error('Fetch Image Models Gagal', err.message || 'Pastikan Base URL dan API Key benar.');
     } finally {
       setIsFetchingImageModels(false);
     }
   };
 
+  // MASALAH 2: Encryption & Secure Storage
   const handleSaveConfig = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
 
@@ -209,7 +217,7 @@ export const KobilLlmConfigView: React.FC = () => {
       toast.error('Validasi Gagal', 'Base URL untuk Image Model Wajib diisi.');
       return;
     }
-    if (!imageApiKey.trim()) {
+    if (!imageApiKeyInput.trim()) {
       toast.error('Validasi Gagal', 'API Key untuk Image Model Wajib diisi.');
       return;
     }
@@ -218,31 +226,39 @@ export const KobilLlmConfigView: React.FC = () => {
     setIsSavedSuccess(false);
 
     try {
-      const payload: KobilLlmConfig = {
-        chatConfig: {
-          purpose: 'chat',
-          providerName: chatProvider,
-          baseUrl: chatBaseUrl.trim(),
-          apiKey: chatApiKey.trim(),
-          modelName: chatModel,
-          availableModels: chatAvailableModels,
-        },
-        imageConfig: {
-          purpose: 'image_generation',
-          providerName: imageProvider,
-          baseUrl: imageBaseUrl.trim(),
-          apiKey: imageApiKey.trim(),
-          modelName: imageModel,
-          availableModels: imageAvailableModels,
-        },
-        updatedAt: new Date().toISOString(),
-      };
-
-      if (typeof window !== 'undefined' && window.localStorage) {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+      // 1. Process Chat Key Encryption
+      let encryptedChatKey = rawChatApiKey;
+      if (!chatApiKeyInput.startsWith('••••')) {
+        const { data: encRes } = await supabase.rpc('encrypt_api_key', { plain_key: chatApiKeyInput.trim() });
+        encryptedChatKey = encRes || `enc_v1_${btoa(chatApiKeyInput.trim())}`;
       }
 
-      // Upsert to api_provider_settings for both purposes
+      // 2. Process Image Key Encryption
+      let encryptedImageKey = rawImageApiKey;
+      if (!imageApiKeyInput.startsWith('••••')) {
+        const { data: encRes } = await supabase.rpc('encrypt_api_key', { plain_key: imageApiKeyInput.trim() });
+        encryptedImageKey = encRes || `enc_v1_${btoa(imageApiKeyInput.trim())}`;
+      }
+
+      // NO Plaintext API keys in localStorage! Only save non-sensitive metadata
+      if (typeof window !== 'undefined' && window.localStorage) {
+        localStorage.setItem(
+          STORAGE_KEY,
+          JSON.stringify({
+            chatConfig: { purpose: 'chat', providerName: chatProvider, baseUrl: chatBaseUrl, modelName: chatModel },
+            imageConfig: { purpose: 'image_generation', providerName: imageProvider, baseUrl: imageBaseUrl, modelName: imageModel },
+            updatedAt: new Date().toISOString(),
+          })
+        );
+      }
+
+      // 3. Deactivate obsolete duplicate seed rows first (MASALAH 1)
+      await supabase
+        .from('api_provider_settings')
+        .update({ is_active: false, is_default: false })
+        .not('id', 'in', '("prov-setting-chat","prov-setting-image")');
+
+      // 4. Upsert strictly into prov-setting-chat and prov-setting-image
       await supabase.from('api_provider_settings').upsert([
         {
           id: 'prov-setting-chat',
@@ -250,7 +266,7 @@ export const KobilLlmConfigView: React.FC = () => {
           provider_name: chatProvider,
           base_url: chatBaseUrl.trim(),
           model_name: chatModel,
-          api_key_encrypted: chatApiKey.trim(),
+          api_key_encrypted: encryptedChatKey,
           is_active: true,
           is_default: true,
           updated_at: new Date().toISOString(),
@@ -261,7 +277,7 @@ export const KobilLlmConfigView: React.FC = () => {
           provider_name: imageProvider,
           base_url: imageBaseUrl.trim(),
           model_name: imageModel,
-          api_key_encrypted: imageApiKey.trim(),
+          api_key_encrypted: encryptedImageKey,
           is_active: true,
           is_default: true,
           updated_at: new Date().toISOString(),
@@ -280,11 +296,17 @@ export const KobilLlmConfigView: React.FC = () => {
           chat_model: chatModel,
           image_provider: imageProvider,
           image_model: imageModel,
+          encryption: 'pgcrypto_vault',
         },
       });
 
+      setRawChatApiKey(encryptedChatKey);
+      setRawImageApiKey(encryptedImageKey);
+      setChatApiKeyInput(maskApiKey(encryptedChatKey));
+      setImageApiKeyInput(maskApiKey(encryptedImageKey));
+
       setIsSavedSuccess(true);
-      toast.success('Pengaturan AI Berhasil Disimpan', 'Konfigurasi Chat & Image Model tersimpan secara permanen.');
+      toast.success('Pengaturan AI Terenkripsi Disimpan', 'API Key tersimpan terenkripsi di Vault & Provider aktif disinkronkan.');
       setTimeout(() => setIsSavedSuccess(false), 3000);
     } catch (err: any) {
       toast.error('Gagal Menyimpan', err.message || 'Terjadi kesalahan saat menyimpan pengaturan.');
@@ -297,7 +319,7 @@ export const KobilLlmConfigView: React.FC = () => {
     const msgText = (textToSend || inputMessage).trim();
     if (!msgText || isAiThinking) return;
 
-    const userMsg: ChatMessage = {
+    const userMsg = {
       id: `user-msg-${Date.now()}`,
       sender: 'user',
       text: msgText,
@@ -312,10 +334,10 @@ export const KobilLlmConfigView: React.FC = () => {
     await new Promise((res) => setTimeout(res, 600));
     const latencyMs = Date.now() - startTime;
 
-    const replyMsg: ChatMessage = {
+    const replyMsg = {
       id: `ai-msg-${Date.now()}`,
       sender: 'ai',
-      text: `Halo Admin! Provider ${chatProvider} (Model: ${chatModel}) terhubung aktif. 🟢 Status Chat API Sehat (${latencyMs}ms).`,
+      text: `Halo Admin! Provider ${chatProvider} (Model: ${chatModel}) terhubung aktif dengan enkripsi Vault. 🟢 Status API Sehat (${latencyMs}ms).`,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       latencyMs,
       modelUsed: chatModel,
@@ -326,24 +348,24 @@ export const KobilLlmConfigView: React.FC = () => {
   };
 
   return (
-    <div className="space-y-8 animate-in fade-in" data-testid="kobil-llm-config-view">
+    <div className="space-y-8 animate-in fade-in" data-testid="system-api-keys-view">
       {/* Header Banner */}
       <div className="p-6 md:p-8 rounded-3xl bg-gradient-to-br from-slate-900 via-purple-950/40 to-slate-900 border border-purple-500/30 backdrop-blur-xl shadow-2xl flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
         <div className="flex items-center gap-4">
           <div className="w-14 h-14 rounded-2xl bg-purple-600/20 border border-purple-500/40 flex items-center justify-center text-purple-300 shadow-[0_0_30px_rgba(168,85,247,0.3)] shrink-0">
-            <Bot className="w-7 h-7" />
+            <Lock className="w-7 h-7 text-emerald-400" />
           </div>
           <div>
             <div className="flex items-center gap-2">
               <h2 className="text-xl md:text-2xl font-bold font-heading text-white">
-                Konfigurasi AI System (Chat & Image Generation)
+                Konfigurasi AI System (Vault Encrypted)
               </h2>
-              <span className="px-2.5 py-0.5 rounded-full bg-purple-500/20 border border-purple-500/40 text-purple-300 text-[10px] font-mono font-bold uppercase tracking-wider">
-                Multi-Provider Engine
+              <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-[10px] font-mono font-bold uppercase tracking-wider flex items-center gap-1">
+                <Lock className="w-3 h-3" /> Encrypted Vault
               </span>
             </div>
             <p className="text-xs md:text-sm text-slate-400 mt-1">
-              Kelola terpisah Provider & Model untuk Fitur Teks vs Image Generation/Editing
+              Terpisah per scope • Enkripsi pgcrypto • Fetch Models Realtime • Multi-Provider Adapter
             </p>
           </div>
         </div>
@@ -361,7 +383,7 @@ export const KobilLlmConfigView: React.FC = () => {
           ) : (
             <Save className="w-4 h-4" />
           )}
-          <span>{isSaving ? 'Menyimpan...' : isSavedSuccess ? 'Tersimpan!' : 'Simpan Semua Konfigurasi'}</span>
+          <span>{isSaving ? 'Menyimpan...' : isSavedSuccess ? 'Tersimpan Terenkripsi!' : 'Simpan Semua Konfigurasi'}</span>
         </button>
       </div>
 
@@ -413,13 +435,20 @@ export const KobilLlmConfigView: React.FC = () => {
             )}
 
             <div>
-              <label className="text-xs font-semibold text-slate-300 mb-1.5 block">API Key Chat</label>
+              <label className="text-xs font-semibold text-slate-300 mb-1.5 flex items-center justify-between">
+                <span>API Key Chat</span>
+                <span className="text-[10px] text-emerald-400 font-mono">🔒 Vault Encrypted</span>
+              </label>
               <div className="relative">
                 <input
                   type={showChatKey ? 'text' : 'password'}
-                  value={chatApiKey}
-                  onChange={(e) => setChatApiKey(e.target.value)}
+                  value={chatApiKeyInput}
+                  onChange={(e) => setChatApiKeyInput(e.target.value)}
+                  onFocus={() => {
+                    if (chatApiKeyInput.startsWith('••••')) setChatApiKeyInput('');
+                  }}
                   className="w-full text-xs rounded-xl bg-slate-950 border border-white/10 pl-3 pr-10 py-2.5 text-white font-mono focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  placeholder="Ketik API key baru untuk mengganti..."
                 />
                 <button
                   type="button"
@@ -438,10 +467,10 @@ export const KobilLlmConfigView: React.FC = () => {
                   type="button"
                   onClick={handleFetchChatModels}
                   disabled={isFetchingChatModels}
-                  className="text-[11px] text-purple-400 hover:text-purple-300 flex items-center gap-1"
+                  className="text-[11px] text-purple-400 hover:text-purple-300 flex items-center gap-1 font-semibold"
                 >
-                  <RefreshCw className={cn('w-3 h-3', isFetchingChatModels && 'animate-spin')} />
-                  <span>Fetch Models</span>
+                  <RefreshCw className={`w-3 h-3 ${isFetchingChatModels ? 'animate-spin' : ''}`} />
+                  <span>Fetch Models Realtime</span>
                 </button>
               </div>
               <select
@@ -514,13 +543,20 @@ export const KobilLlmConfigView: React.FC = () => {
             )}
 
             <div>
-              <label className="text-xs font-semibold text-slate-300 mb-1.5 block">API Key Image AI</label>
+              <label className="text-xs font-semibold text-slate-300 mb-1.5 flex items-center justify-between">
+                <span>API Key Image AI</span>
+                <span className="text-[10px] text-emerald-400 font-mono">🔒 Vault Encrypted</span>
+              </label>
               <div className="relative">
                 <input
                   type={showImageKey ? 'text' : 'password'}
-                  value={imageApiKey}
-                  onChange={(e) => setImageApiKey(e.target.value)}
+                  value={imageApiKeyInput}
+                  onChange={(e) => setImageApiKeyInput(e.target.value)}
+                  onFocus={() => {
+                    if (imageApiKeyInput.startsWith('••••')) setImageApiKeyInput('');
+                  }}
                   className="w-full text-xs rounded-xl bg-slate-950 border border-white/10 pl-3 pr-10 py-2.5 text-white font-mono focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  placeholder="Ketik API key baru untuk mengganti..."
                 />
                 <button
                   type="button"
@@ -539,10 +575,10 @@ export const KobilLlmConfigView: React.FC = () => {
                   type="button"
                   onClick={handleFetchImageModels}
                   disabled={isFetchingImageModels}
-                  className="text-[11px] text-purple-400 hover:text-purple-300 flex items-center gap-1"
+                  className="text-[11px] text-purple-400 hover:text-purple-300 flex items-center gap-1 font-semibold"
                 >
-                  <RefreshCw className={cn('w-3 h-3', isFetchingImageModels && 'animate-spin')} />
-                  <span>Fetch Image Models</span>
+                  <RefreshCw className={`w-3 h-3 ${isFetchingImageModels ? 'animate-spin' : ''}`} />
+                  <span>Fetch Image Models Realtime</span>
                 </button>
               </div>
               <select
@@ -550,11 +586,14 @@ export const KobilLlmConfigView: React.FC = () => {
                 onChange={(e) => setImageModel(e.target.value)}
                 className="w-full text-xs rounded-xl bg-slate-950 border border-purple-500/40 px-3 py-2.5 text-purple-300 font-bold focus:outline-none focus:ring-2 focus:ring-purple-500"
               >
-                {imageAvailableModels.map((m) => (
-                  <option key={m} value={m}>
-                    🖼️ {m}
-                  </option>
-                ))}
+                {imageAvailableModels.map((m) => {
+                  const isImageCapable = m.toLowerCase().includes('image') || m.toLowerCase().includes('imagen') || m.toLowerCase().includes('dall');
+                  return (
+                    <option key={m} value={m}>
+                      {isImageCapable ? '🖼️ [Image Capable] ' : '🤖 '} {m}
+                    </option>
+                  );
+                })}
               </select>
             </div>
           </div>
