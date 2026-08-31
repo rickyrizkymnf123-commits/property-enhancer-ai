@@ -45,7 +45,7 @@ export const DEFAULT_AI_CONFIG = {
   chatConfig: {
     purpose: 'chat' as const,
     providerName: 'kobil_llm' as const,
-    baseUrl: 'https://api.koboiillm.com/v1',
+    baseUrl: 'https://api.koboillm.com/v1',
     apiKey: 'sk-koboi-live-99887766554433221100',
     modelName: 'gemini-2.5-flash',
     availableModels: ['gemini-2.5-flash', 'gemini-2.0-flash', 'gpt-4o-mini', 'gpt-4o', 'claude-3-5-sonnet', 'deepseek-chat'],
@@ -53,7 +53,7 @@ export const DEFAULT_AI_CONFIG = {
   imageConfig: {
     purpose: 'image_generation' as const,
     providerName: 'kobil_llm' as const,
-    baseUrl: 'https://api.koboiillm.com/v1',
+    baseUrl: 'https://api.koboillm.com/v1',
     apiKey: 'sk-koboi-live-99887766554433221100',
     modelName: 'gemini-2.5-flash-image',
     availableModels: [
@@ -114,6 +114,11 @@ export const KobilLlmConfigView: React.FC = () => {
 
   // Load config on mount from localStorage AND DB
   useEffect(() => {
+    const normalizeUrl = (url?: string | null) => {
+      if (!url) return 'https://api.koboillm.com/v1';
+      return url.replace('koboiillm.com', 'koboillm.com').trim();
+    };
+
     const loadConfig = async () => {
       // 1. Try local storage first for fast local DB load
       try {
@@ -123,7 +128,7 @@ export const KobilLlmConfigView: React.FC = () => {
             const parsed = JSON.parse(rawLocal);
             if (parsed.chatConfig) {
               if (parsed.chatConfig.providerName) setChatProvider(parsed.chatConfig.providerName);
-              if (parsed.chatConfig.baseUrl) setChatBaseUrl(parsed.chatConfig.baseUrl);
+              if (parsed.chatConfig.baseUrl) setChatBaseUrl(normalizeUrl(parsed.chatConfig.baseUrl));
               if (parsed.chatConfig.modelName) setChatModel(parsed.chatConfig.modelName);
               if (parsed.chatConfig.rawApiKey) {
                 setRawChatApiKey(parsed.chatConfig.rawApiKey);
@@ -132,7 +137,7 @@ export const KobilLlmConfigView: React.FC = () => {
             }
             if (parsed.imageConfig) {
               if (parsed.imageConfig.providerName) setImageProvider(parsed.imageConfig.providerName);
-              if (parsed.imageConfig.baseUrl) setImageBaseUrl(parsed.imageConfig.baseUrl);
+              if (parsed.imageConfig.baseUrl) setImageBaseUrl(normalizeUrl(parsed.imageConfig.baseUrl));
               if (parsed.imageConfig.modelName) setImageModel(parsed.imageConfig.modelName);
               if (parsed.imageConfig.rawApiKey) {
                 setRawImageApiKey(parsed.imageConfig.rawApiKey);
@@ -158,7 +163,7 @@ export const KobilLlmConfigView: React.FC = () => {
 
           if (chatRow) {
             if (chatRow.provider_name) setChatProvider(chatRow.provider_name);
-            if (chatRow.base_url) setChatBaseUrl(chatRow.base_url);
+            if (chatRow.base_url) setChatBaseUrl(normalizeUrl(chatRow.base_url));
             if (chatRow.model_name) setChatModel(chatRow.model_name);
             if (chatRow.api_key_encrypted && !isMaskedKeyString(chatRow.api_key_encrypted)) {
               let decrypted = chatRow.api_key_encrypted;
@@ -175,7 +180,7 @@ export const KobilLlmConfigView: React.FC = () => {
 
           if (imageRow) {
             if (imageRow.provider_name) setImageProvider(imageRow.provider_name);
-            if (imageRow.base_url) setImageBaseUrl(imageRow.base_url);
+            if (imageRow.base_url) setImageBaseUrl(normalizeUrl(imageRow.base_url));
             if (imageRow.model_name) setImageModel(imageRow.model_name);
             if (imageRow.api_key_encrypted && !isMaskedKeyString(imageRow.api_key_encrypted)) {
               let decrypted = imageRow.api_key_encrypted;
@@ -334,7 +339,12 @@ export const KobilLlmConfigView: React.FC = () => {
         if (encRes) encryptedImageKey = encRes;
       } catch (_) {}
 
+      const cleanChatBaseUrl = (chatBaseUrl || 'https://api.koboillm.com/v1').replace('koboiillm.com', 'koboillm.com').trim();
+      const cleanImageBaseUrl = (imageBaseUrl || 'https://api.koboillm.com/v1').replace('koboiillm.com', 'koboillm.com').trim();
+
       // Update state
+      setChatBaseUrl(cleanChatBaseUrl);
+      setImageBaseUrl(cleanImageBaseUrl);
       setRawChatApiKey(chatKeyToSave);
       setRawImageApiKey(imageKeyToSave);
       setChatApiKeyInput(maskApiKey(chatKeyToSave));
@@ -345,8 +355,8 @@ export const KobilLlmConfigView: React.FC = () => {
         localStorage.setItem(
           LOCAL_STORAGE_CONFIG_KEY,
           JSON.stringify({
-            chatConfig: { purpose: 'chat', providerName: chatProvider, baseUrl: chatBaseUrl, modelName: chatModel, rawApiKey: chatKeyToSave },
-            imageConfig: { purpose: 'image_generation', providerName: imageProvider, baseUrl: imageBaseUrl, modelName: imageModel, rawApiKey: imageKeyToSave },
+            chatConfig: { purpose: 'chat', providerName: chatProvider, baseUrl: cleanChatBaseUrl, modelName: chatModel, rawApiKey: chatKeyToSave },
+            imageConfig: { purpose: 'image_generation', providerName: imageProvider, baseUrl: cleanImageBaseUrl, modelName: imageModel, rawApiKey: imageKeyToSave },
             updatedAt: new Date().toISOString(),
           })
         );
@@ -367,7 +377,7 @@ export const KobilLlmConfigView: React.FC = () => {
             id: 'prov-setting-chat',
             purpose: 'chat',
             provider_name: chatProvider,
-            base_url: chatBaseUrl.trim(),
+            base_url: cleanChatBaseUrl,
             model_name: chatModel,
             api_key_encrypted: encryptedChatKey,
             is_active: true,
@@ -378,7 +388,7 @@ export const KobilLlmConfigView: React.FC = () => {
             id: 'prov-setting-image',
             purpose: 'image_generation',
             provider_name: imageProvider,
-            base_url: imageBaseUrl.trim(),
+            base_url: cleanImageBaseUrl,
             model_name: imageModel,
             api_key_encrypted: encryptedImageKey,
             is_active: true,
