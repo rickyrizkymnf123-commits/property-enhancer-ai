@@ -22,3 +22,9 @@
 4. **Test Suite & Repository Sync**:
    - 100% Vitest pass rate maintained (340/340 passed across 11 test suites).
    - Committed and pushed to `rickyrizkymnf123-commits/property-enhancer-ai.git` on branch `main` (commit `07f2201`).
+
+5. **Real AI API Connectivity & Zero Fake Response Overhaul**:
+   - **Interactive LLM Chat Completion Test**: Replaced template responses in `KobilLlmConfigView.tsx` with real HTTP `POST` requests to `${chatBaseUrl}/chat/completions` using Bearer Auth with the active key. Displayed exact LLM responses, measured real latency, and logged error HTTP status codes if API calls fail.
+   - **Realtime Model Fetching & Image Model Filtering**: Updated `handleListModels` in both `supabase/functions/list-ai-models/index.ts` and `src/lib/mockSupabase.ts` to perform real HTTP `GET` requests to `${baseUrl}/models`. Filtered models list for image-capable models when `purpose === 'image_generation'`.
+   - **API Usage Logging**: Seeded initial `api_usage_logs` in `mockDb` and enabled real-time log insertion and streaming via `realtimeMultiplexer` on every chat test, model fetch, or image generation call. Added `kobil_llm`, `gemini_direct`, and `openai_direct` options to `ApiUsageLogsTable.tsx`.
+   - **Clean Production Build**: Verified zero TypeScript compilation errors with `npx tsc --noEmit` and `npm run build` (`built in 2.30s`). All 340 unit and E2E tests passing 100%. Committed and pushed to GitHub commit `f93d8e3`.
