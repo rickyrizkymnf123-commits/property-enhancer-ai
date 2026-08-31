@@ -69,6 +69,11 @@
    - **Raw Error Transparency**: Raw HTTP responses and JSON structures are reported directly in UI Toast and Red Alert Banners without generic fallback wrappers.
    - **Verified Build & Tests**: 100% test pass rate (340/340) and clean production build (`built in 2.33s`). Committed and pushed to GitHub commit `0ba2a58`.
 
+13. **Strict Error Guard & Result View Suppression**:
+   - **Result Slider Suppression**: When the AI API returns an HTTP error (e.g. HTTP 401 token_not_found_in_db), `testEnhancedUrl` is set to `null` and `isDone` evaluates to `false`, completely hiding/suppressing the Before/After result slider.
+   - **Error Alert Banner Only**: Displays only the raw HTTP error message card detailing the LiteLLM Proxy / API response status so users/admins immediately see why no image was generated.
+   - **Verified Build & Tests**: 100% test pass rate (340/340) and clean production build (`built in 2.35s`). Committed and pushed to GitHub commit `d8eae2c`.
+
 13. **AI Studio Image Enhancement Error Handling & Kobil LLM Proxy Auth Integration**:
    - **Strict Error Guard & Result View Suppression**: Hide/suppress Before/After slider and "SESUDAH (AI)" fallback image when AI API returns HTTP error (e.g. 401, 400, 500); display prominent error card with raw server JSON error message.
    - **Kobil LLM Proxy API Key & Token Credentials Resolution**: Ensure active Admin/User API key is passed cleanly in `Authorization: Bearer <key>` header to `https://api.koboillm.com/v1/chat/completions` across `KobilLlmConfigView.tsx`, `useRealtimeEnhancement.ts`, `mockSupabase.ts`, and `supabase/functions/enhance-image/index.ts`.
