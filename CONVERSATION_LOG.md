@@ -79,6 +79,11 @@
    - **Detailed Diagnostic Logging**: Streams request endpoints (`POST /chat/completions`), model IDs, masked authorization headers, HTTP response status codes, latencies in ms, and raw JSON server response payloads so users/admins can diagnose exact API error locations instantly.
    - **Verified Build & Tests**: 100% test pass rate across 367 tests and clean production build (`built in 2.34s`). Committed and pushed to GitHub commit `ac92629`.
 
+15. **Provider Resolution Enforcement (`kobil_llm` over `lovable`)**:
+   - **Strict Kobil LLM Resolution**: Resolved issue where default seed `prov-lovable` was being selected instead of `kobil_llm`. Updated `mockSupabase.ts`, `KobilLlmConfigView.tsx`, and `supabase/functions/enhance-image/index.ts` to strictly query `.eq('provider_name', 'kobil_llm')` for image generation.
+   - **Correct Model ID**: Cleaned model name to `gemini-2.5-flash-image` pointing directly to `https://api.koboillm.com/v1`.
+   - **Verified Build & Tests**: 100% test pass rate across 369 tests and clean production build (`built in 2.33s`). Committed and pushed to GitHub commit `2fb9637`.
+
 14. **Investigation of Error Guard & Result View Suppression in AI Studio & Editor (Explorer 1)**:
    - Investigated `EditorPage.tsx`, `useRealtimeEnhancement.ts`, `KobilLlmConfigView.tsx`, `BeforeAfterSlider.tsx`, `mockSupabase.ts`, and `supabase/functions/enhance-image/index.ts`.
    - Identified critical fixes:
