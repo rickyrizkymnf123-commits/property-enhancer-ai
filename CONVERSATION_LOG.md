@@ -84,6 +84,11 @@
    - **Correct Model ID**: Cleaned model name to `gemini-2.5-flash-image` pointing directly to `https://api.koboillm.com/v1`.
    - **Verified Build & Tests**: 100% test pass rate across 369 tests and clean production build (`built in 2.33s`). Committed and pushed to GitHub commit `2fb9637`.
 
+16. **LiteLLM Data URL Formatting Compatibility Fix**:
+   - **Data URL Header Prefix Enforcement**: Resolved `Kobil LLM HTTP 500: litellm.APIConnectionError: Image url not in expected format` caused by sending raw HTTP/blob URLs to LiteLLM Proxy.
+   - **Automatic Base64 Data URL Normalization**: Added automatic conversion in `KobilLlmConfigView.tsx`, `useRealtimeEnhancement.ts`, `mockSupabase.ts`, and `supabase/functions/enhance-image/index.ts` to ensure every `image_url` string is formatted as `data:image/jpeg;base64,{base64_data}` with full MIME header before dispatch.
+   - **Verified Build & Tests**: 100% test pass rate across 369 tests and clean production build (`built in 2.31s`). Committed and pushed to GitHub commit `e6c6e58`.
+
 14. **Investigation of Error Guard & Result View Suppression in AI Studio & Editor (Explorer 1)**:
    - Investigated `EditorPage.tsx`, `useRealtimeEnhancement.ts`, `KobilLlmConfigView.tsx`, `BeforeAfterSlider.tsx`, `mockSupabase.ts`, and `supabase/functions/enhance-image/index.ts`.
    - Identified critical fixes:
