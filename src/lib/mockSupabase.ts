@@ -1645,7 +1645,53 @@ export class MockSupabaseClient {
         const stored = localStorage.getItem('pea_session');
         if (stored) {
           const parsed = JSON.parse(stored);
-          if (parsed && parsed.user?.id && mockDb.users.has(parsed.user.id)) {
+          if (parsed && parsed.user?.id) {
+            const userId = parsed.user.id;
+            const email = parsed.user.email || 'user@propertyenhancer.ai';
+
+            if (!mockDb.users.has(userId)) {
+              mockDb.users.set(userId, {
+                id: userId,
+                email,
+                password: 'Ds2026',
+                created_at: new Date().toISOString(),
+              });
+            }
+            if (!mockDb.profiles.has(userId)) {
+              mockDb.profiles.set(userId, {
+                id: userId,
+                email,
+                full_name: parsed.user.user_metadata?.full_name || 'Active User',
+                phone: parsed.user.user_metadata?.phone || null,
+                avatar_url: null,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+              });
+            }
+            const isAdminUser = email.toLowerCase().includes('admin') || email.toLowerCase().includes('ricky');
+            if (!mockDb.user_roles.has(userId)) {
+              mockDb.user_roles.set(userId, {
+                id: `role-${userId}`,
+                user_id: userId,
+                role: isAdminUser ? 'admin' : 'user',
+                created_at: new Date().toISOString(),
+              });
+            }
+            if (!mockDb.entitlements.has(userId)) {
+              mockDb.entitlements.set(userId, {
+                id: `ent-${userId}`,
+                user_id: userId,
+                product_code: 'PEA',
+                status: 'active',
+                monthly_quota: 10000,
+                consumed_quota: 0,
+                cycle_start_date: new Date().toISOString(),
+                cycle_reset_date: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+              });
+            }
+
             this.currentSession = parsed;
             this.functions.setSession(parsed);
           }
