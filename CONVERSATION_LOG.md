@@ -117,6 +117,12 @@
    - **Strict Response Parsing**: Evaluates `data[0].url` or `data[0].b64_json` as documented in §6. If missing, reports a raw, clear error message without any fake canvas fallbacks.
    - **Verified Build & Tests**: 100% test pass rate across 369 tests and clean production build (`built in 2.47s`). Committed and pushed to GitHub commit `fca45d9`.
 
+22. **Filter Model AI: Image-Capable Models Only (`IMAGE_CAPABLE_MODELS`)**:
+   - **Hardcoded Image-Capable List**: Exported `IMAGE_CAPABLE_MODELS` array containing 8 official image-to-image models (`gemini/gemini-2.5-flash-image` as default, `openai/gpt-image-1.5`, `openai/gpt-image-1-mini`, `openai/gpt-image-2`, `gemini/gemini-3.1-flash-image-preview`, `gemini/gemini-3-pro-image-preview`, `vertex_ai/imagen-4.0-fast-generate-001`, `vertex_ai/imagen-4.0-generate-001`).
+   - **Restricted Dropdown & Validation Warning**: Replaced raw text model inputs with a `<select>` dropdown restricted to `IMAGE_CAPABLE_MODELS`. If database contains an invalid text model, displays warning banner `"Model saat ini tidak valid untuk image generation. Pilih dari daftar di bawah."` and auto-defaults to `gemini/gemini-2.5-flash-image`.
+   - **Migration SQL Created**: Created SQL migration `supabase/migrations/20260831194800_fix_invalid_image_models.sql` to clean invalid image models in `api_provider_settings`.
+   - **Verified Build & Tests**: 100% test pass rate across 369 tests and clean production build (`built in 2.37s`). Committed and pushed to GitHub commit `a89080b`.
+
 14. **Investigation of Error Guard & Result View Suppression in AI Studio & Editor (Explorer 1)**:
    - Investigated `EditorPage.tsx`, `useRealtimeEnhancement.ts`, `KobilLlmConfigView.tsx`, `BeforeAfterSlider.tsx`, `mockSupabase.ts`, and `supabase/functions/enhance-image/index.ts`.
    - Identified critical fixes:
