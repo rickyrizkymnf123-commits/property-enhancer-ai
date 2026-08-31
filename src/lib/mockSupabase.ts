@@ -1409,30 +1409,99 @@ export class MockFunctionsClient {
         const imageBlob = new Blob([bytes], { type: mimeType });
         const ext = mimeType.includes('png') ? 'png' : 'jpg';
 
-        const form = new FormData();
-        form.append('model', modelName);
-        form.append('image', imageBlob, `original.${ext}`);
-        form.append('prompt', fullPromptText);
-        form.append('size', '1024x1024');
-        form.append('quality', 'high');
+        let response: Response | null = null;
 
-        const res = await fetch(endpoint, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${rawApiKey}`,
-          },
-          body: form,
-        });
+        // Strategy 1 (Primary): POST /images/edits
+        try {
+          const form = new FormData();
+          form.append('model', modelName);
+          form.append('image', imageBlob, `original.${ext}`);
+          form.append('prompt', fullPromptText);
+          form.append('size', '1024x1024');
+          form.append('quality', 'high');
 
-        if (!res.ok) {
-          const errText = await res.text();
-          rawApiError = `Kobil LLM HTTP ${res.status} (${endpoint}): ${errText.substring(0, 500)}`;
-        } else {
-          const json = await res.json();
-          const imageResult = json?.data?.[0]?.url || json?.data?.[0]?.b64_json || null;
+          const res = await fetch(endpoint, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${rawApiKey}`,
+            },
+            body: form,
+          });
+
+          if (res.ok) {
+            response = res;
+          } else if (res.status === 401) {
+            const errText = await res.text();
+            rawApiError = `Kobil LLM HTTP 401: Invalid API Key / Token tidak ditemukan di database KoboiLLM. Silakan buka Admin Panel (/admin) -> Pengaturan AI, lalu simpan API Key KoboiLLM yang valid. Raw: ${errText.substring(0, 300)}`;
+          }
+        } catch (_) {}
+
+        // Strategy 2 (Fallback): POST /chat/completions
+        if (!response && !rawApiError) {
+          try {
+            const chatEndpoint = `${rawBaseUrl}/chat/completions`;
+            const chatRes = await fetch(chatEndpoint, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${rawApiKey}`,
+              },
+              body: JSON.stringify({
+                model: modelName,
+                messages: [
+                  {
+                    role: 'user',
+                    content: [
+                      { type: 'text', text: fullPromptText },
+                      { type: 'image_url', image_url: { url: inputImageBase64 } },
+                    ],
+                  },
+                ],
+              }),
+            });
+
+            if (chatRes.ok) {
+              response = chatRes;
+            } else {
+              const errText = await chatRes.text();
+              if (chatRes.status === 401) {
+                rawApiError = `Kobil LLM HTTP 401: Invalid API Key / Token tidak ditemukan di database KoboiLLM. Silakan buka Admin Panel (/admin) -> Pengaturan AI, lalu simpan API Key KoboiLLM yang valid. Raw: ${errText.substring(0, 300)}`;
+              } else {
+                rawApiError = `Kobil LLM HTTP ${chatRes.status}: ${errText.substring(0, 500)}`;
+              }
+            }
+          } catch (chatErr: any) {
+            rawApiError = chatErr?.message || 'Network error saat menghubungi proxy Kobil LLM';
+          }
+        }
+
+        if (response && response.ok && !rawApiError) {
+          const json = await response.json();
+          let imageResult =
+            json?.data?.[0]?.url ||
+            json?.data?.[0]?.b64_json ||
+            json?.data?.[0]?.image_url?.url ||
+            json?.data?.[0]?.image_url ||
+            json?.choices?.[0]?.message?.images?.[0]?.image_url?.url ||
+            json?.choices?.[0]?.message?.images?.[0]?.b64_json ||
+            json?.choices?.[0]?.message?.images?.[0]?.url ||
+            json?.choices?.[0]?.message?.images?.[0] ||
+            null;
+
+          if (!imageResult && json?.choices?.[0]?.message?.content) {
+            const contentStr = String(json.choices[0].message.content).trim();
+            const mdMatch = contentStr.match(/!\[.*?\]\((data:image\/[^)]+|https?:\/\/[^)]+)\)/);
+            if (mdMatch && mdMatch[1]) {
+              imageResult = mdMatch[1];
+            } else if (contentStr.startsWith("data:image/") || contentStr.startsWith("http://") || contentStr.startsWith("https://")) {
+              imageResult = contentStr;
+            } else if (contentStr.length > 500 && /^[A-Za-z0-9+/=]+$/.test(contentStr.substring(0, 100).replace(/\s/g, ""))) {
+              imageResult = `data:image/jpeg;base64,${contentStr}`;
+            }
+          }
 
           if (!imageResult) {
-            rawApiError = `Response Kobil LLM tidak mengandung data[0].url atau data[0].b64_json. Response: ${JSON.stringify(json).substring(0, 800)}`;
+            rawApiError = `Response Kobil LLM tidak mengandung gambar. Response: ${JSON.stringify(json).substring(0, 800)}`;
           } else {
             let finalUrl = typeof imageResult === 'object' && imageResult?.url ? imageResult.url : imageResult;
             enhancedResultUrl = typeof finalUrl === 'string' && (finalUrl.startsWith('data:') || finalUrl.startsWith('http'))
