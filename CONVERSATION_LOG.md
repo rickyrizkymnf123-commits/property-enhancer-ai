@@ -106,6 +106,11 @@
    - **Pure Kobil LLM AI Output**: Results are rendered strictly when Kobil LLM AI API returns a valid generated Base64 or Data URL image. If the upstream server returns no image, the system displays a clear, raw error notification detailing the exact missing image status.
    - **Verified Build & Tests**: 100% test pass rate across 369 tests and clean production build (`built in 2.34s`). Committed and pushed to GitHub commit `12a4dde`.
 
+20. **Official KoboiLLM Documentation (`docs.koboillm.com`) Alignment**:
+   - **`/v1/images/edits` Integration**: Implemented official KoboiLLM Image Editing endpoint (`POST /v1/images/edits`) sending `multipart/form-data` with `image`, `prompt`, `model`, `size: "1024x1024"`, and `quality: "high"` as documented in KoboiLLM Docs §5.1.
+   - **`openai/gpt-image-1.5` Default Model**: Added `openai/gpt-image-1.5` to available models list as recommended in KoboiLLM documentation for accurate image-to-image editing.
+   - **Verified Build & Tests**: 100% test pass rate across 369 tests and clean production build (`built in 2.36s`). Committed and pushed to GitHub commit `8b046fd`.
+
 14. **Investigation of Error Guard & Result View Suppression in AI Studio & Editor (Explorer 1)**:
    - Investigated `EditorPage.tsx`, `useRealtimeEnhancement.ts`, `KobilLlmConfigView.tsx`, `BeforeAfterSlider.tsx`, `mockSupabase.ts`, and `supabase/functions/enhance-image/index.ts`.
    - Identified critical fixes:
