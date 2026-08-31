@@ -111,6 +111,12 @@
    - **`openai/gpt-image-1.5` Default Model**: Added `openai/gpt-image-1.5` to available models list as recommended in KoboiLLM documentation for accurate image-to-image editing.
    - **Verified Build & Tests**: 100% test pass rate across 369 tests and clean production build (`built in 2.36s`). Committed and pushed to GitHub commit `8b046fd`.
 
+21. **Final Fix — Official Kobil LLM `/v1/images/edits` Endpoint & Complete Purge of Canvas Enhancer**:
+   - **Complete Canvas Purge**: Fully emptied `src/lib/aiImageEnhancer.ts` and removed all imports and calls from `useRealtimeEnhancement.ts`, `KobilLlmConfigView.tsx`, and `mockSupabase.ts`. No fallback canvas is ever rendered.
+   - **Official `/v1/images/edits` Execution**: Edge function `enhance-image/index.ts` and `mockSupabase.ts` now execute strictly via `POST /v1/images/edits` sending `multipart/form-data` containing `image` (Blob), `prompt`, `model`, `size: "1024x1024"`, and `quality: "high"` as specified in official KoboiLLM documentation §5.1.
+   - **Strict Response Parsing**: Evaluates `data[0].url` or `data[0].b64_json` as documented in §6. If missing, reports a raw, clear error message without any fake canvas fallbacks.
+   - **Verified Build & Tests**: 100% test pass rate across 369 tests and clean production build (`built in 2.47s`). Committed and pushed to GitHub commit `fca45d9`.
+
 14. **Investigation of Error Guard & Result View Suppression in AI Studio & Editor (Explorer 1)**:
    - Investigated `EditorPage.tsx`, `useRealtimeEnhancement.ts`, `KobilLlmConfigView.tsx`, `BeforeAfterSlider.tsx`, `mockSupabase.ts`, and `supabase/functions/enhance-image/index.ts`.
    - Identified critical fixes:
