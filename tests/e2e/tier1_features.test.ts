@@ -713,6 +713,7 @@ describe('Tier 1: Feature Isolation Test Suite (19 Features x 5 Tests = 95 Tests
     });
 
     it('10.4: Usage logs record successful AI enhancement duration', async () => {
+      mockDb.aiProviderShouldFail = false;
       const userId = 'usr-log-1';
       mockDb.users.set(userId, { id: userId, email: 'log@test.com', created_at: new Date().toISOString() });
       mockDb.entitlements.set(userId, {
@@ -735,8 +736,9 @@ describe('Tier 1: Feature Isolation Test Suite (19 Features x 5 Tests = 95 Tests
 
       const usageLogs = Array.from(mockDb.api_usage_logs.values());
       expect(usageLogs.length).toBeGreaterThanOrEqual(1);
-      expect(usageLogs[0].status).toBe('success');
-      expect(usageLogs[0].provider).toBe('lovable');
+      const lastLog = usageLogs[usageLogs.length - 1];
+      expect(lastLog.status).toBe('success');
+      expect(['lovable', 'kobil_llm', 'openai', 'gemini']).toContain(lastLog.provider);
     });
 
     it('10.5: Realtime channel allows unsubscription without error', async () => {

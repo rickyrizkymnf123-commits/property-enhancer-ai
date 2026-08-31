@@ -78,9 +78,17 @@ export async function handleListModels(req: Request): Promise<Response> {
     }
 
     const json = await res.json();
-    const modelIds: string[] = (json.data || json.models || [])
+    let modelIds: string[] = (json.data || json.models || [])
       .map((m: any) => (typeof m === "string" ? m : m.id || m.name))
       .filter(Boolean);
+
+    if (payload.purpose === "image_generation" && modelIds.length > 0) {
+      const imageKeywords = ["image", "imagen", "dall", "flux", "sd", "vision", "edit", "bfl", "stability", "midjourney"];
+      const filtered = modelIds.filter(id => imageKeywords.some(kw => id.toLowerCase().includes(kw)));
+      if (filtered.length > 0) {
+        modelIds = filtered;
+      }
+    }
 
     return new Response(
       JSON.stringify({ success: true, models: modelIds }),

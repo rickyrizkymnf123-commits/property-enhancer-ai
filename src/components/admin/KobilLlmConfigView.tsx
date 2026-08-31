@@ -13,7 +13,7 @@ import {
   AlertTriangle,
   Lock,
 } from 'lucide-react';
-import { supabase, mockDb } from '../../lib/supabase';
+import { supabase, mockDb, realtimeMultiplexer } from '../../lib/supabase';
 import { useAuth } from '../../hooks/useAuth';
 import { useToast } from '../../hooks/useToast';
 import { maskApiKey } from '../../lib/maskUtils';
@@ -461,14 +461,128 @@ export const KobilLlmConfigView: React.FC = () => {
     if (!textToSend) setInputMessage('');
     setIsAiThinking(true);
 
-    const startTime = Date.now();
-    await new Promise((res) => setTimeout(res, 600));
-    const latencyMs = Date.now() - startTime;
+    const activeKey = isMaskedKeyString(chatApiKeyInput)
+      ? rawChatApiKey
+      : (chatApiKeyInput.trim() || rawChatApiKey);
 
+    const endpoint = chatBaseUrl.trim().endsWith('/')
+      ? `${chatBaseUrl.trim()}chat/completions`
+      : `${chatBaseUrl.trim()}/chat/completions`;
+
+    const startTime = Date.now();
+    let replyText = '';
+    let isSuccess = false;
+
+    try {
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${activeKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: chatModel,
+          messages: [
+            { role: 'system', content: 'You are a helpful AI real estate assistant for Property Enhancer AI. Respond concisely in Indonesian.' },
+            { role: 'user', content: msgText }
+          ],
+          temperature: 0.7,
+        }),
+      });
+
+      const latencyMs = Date.now() - startTime;
+
+      if (res.ok) {
+        const json = await res.json();
+        replyText = json.choices?.[0]?.message?.content || json.message || JSON.stringify(json);
+        isSuccess = true;
+
+        // Log usage
+        const usageLog = {
+          id: `usage-chat-${Date.now()}`,
+          user_id: user?.id || 'admin-ricky-main-uuid',
+          user_email: user?.email || 'rickyrizkymnf123@gmail.com',
+          image_id: null,
+          provider: chatProvider,
+          model: chatModel,
+          tokens_used: json.usage?.total_tokens || Math.ceil(msgText.length / 4) + 60,
+          latency_ms: latencyMs,
+          cost_estimate_usd: 0.0015,
+          status: 'success',
+          error_code: null,
+          created_at: new Date().toISOString(),
+        };
+
+        try {
+          await supabase.from('api_usage_logs').insert([usageLog]);
+        } catch (_) {}
+
+        if (mockDb && mockDb.api_usage_logs) {
+          mockDb.api_usage_logs.set(usageLog.id, usageLog as any);
+          realtimeMultiplexer.emit('api_usage_logs', 'INSERT', usageLog);
+        }
+      } else {
+        const errText = await res.text();
+        replyText = `⚠️ Koneksi API (${chatProvider} - ${chatModel}) HTTP ${res.status}: ${errText.substring(0, 250)}`;
+
+        const usageLog = {
+          id: `usage-chat-err-${Date.now()}`,
+          user_id: user?.id || 'admin-ricky-main-uuid',
+          user_email: user?.email || 'rickyrizkymnf123@gmail.com',
+          image_id: null,
+          provider: chatProvider,
+          model: chatModel,
+          tokens_used: 0,
+          latency_ms: latencyMs,
+          cost_estimate_usd: 0,
+          status: 'failed',
+          error_code: `HTTP_${res.status}`,
+          created_at: new Date().toISOString(),
+        };
+
+        try {
+          await supabase.from('api_usage_logs').insert([usageLog]);
+        } catch (_) {}
+
+        if (mockDb && mockDb.api_usage_logs) {
+          mockDb.api_usage_logs.set(usageLog.id, usageLog as any);
+          realtimeMultiplexer.emit('api_usage_logs', 'INSERT', usageLog);
+        }
+      }
+    } catch (err: any) {
+      const latencyMs = Date.now() - startTime;
+      replyText = `⚠️ Gagal menghubungkan ke ${endpoint}: ${err.message || 'Network error'}`;
+
+      const usageLog = {
+        id: `usage-chat-err-${Date.now()}`,
+        user_id: user?.id || 'admin-ricky-main-uuid',
+        user_email: user?.email || 'rickyrizkymnf123@gmail.com',
+        image_id: null,
+        provider: chatProvider,
+        model: chatModel,
+        tokens_used: 0,
+        latency_ms: latencyMs,
+        cost_estimate_usd: 0,
+        status: 'failed',
+        error_code: err.message || 'NET_ERROR',
+        created_at: new Date().toISOString(),
+      };
+
+      try {
+        await supabase.from('api_usage_logs').insert([usageLog]);
+      } catch (_) {}
+
+      if (mockDb && mockDb.api_usage_logs) {
+        mockDb.api_usage_logs.set(usageLog.id, usageLog as any);
+        realtimeMultiplexer.emit('api_usage_logs', 'INSERT', usageLog);
+      }
+    }
+
+    const latencyMs = Date.now() - startTime;
     const replyMsg = {
       id: `ai-msg-${Date.now()}`,
       sender: 'ai',
-      text: `Halo Admin! Provider ${chatProvider} (Model: ${chatModel}) terhubung aktif dengan enkripsi Vault. 🟢 Status API Sehat (${latencyMs}ms).`,
+      text: replyText,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       latencyMs,
       modelUsed: chatModel,

@@ -512,6 +512,85 @@ export class MockDatabase {
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     } as any);
+
+    // Seed Initial API Usage Logs
+    const now = Date.now();
+    const initialLogs = [
+      {
+        id: 'usage-seed-1',
+        user_id: 'admin-ricky-main-uuid',
+        user_email: 'rickyrizkymnf123@gmail.com',
+        image_id: 'img-seed-101',
+        provider: 'kobil_llm',
+        model: 'gemini-2.5-flash-image',
+        tokens_used: 150,
+        latency_ms: 840,
+        cost_estimate_usd: 0.004,
+        status: 'success',
+        error_code: null,
+        created_at: new Date(now - 1000 * 60 * 15).toISOString(),
+      },
+      {
+        id: 'usage-seed-2',
+        user_id: 'admin-ricky-main-uuid',
+        user_email: 'rickyrizkymnf123@gmail.com',
+        image_id: null,
+        provider: 'kobil_llm',
+        model: 'gemini-2.5-flash',
+        tokens_used: 85,
+        latency_ms: 320,
+        cost_estimate_usd: 0.001,
+        status: 'success',
+        error_code: null,
+        created_at: new Date(now - 1000 * 60 * 45).toISOString(),
+      },
+      {
+        id: 'usage-seed-3',
+        user_id: 'admin-user-0001-uuid',
+        user_email: 'admin@propertyenhancer.ai',
+        image_id: 'img-seed-102',
+        provider: 'gemini_direct',
+        model: 'gemini-2.0-flash',
+        tokens_used: 110,
+        latency_ms: 410,
+        cost_estimate_usd: 0.002,
+        status: 'success',
+        error_code: null,
+        created_at: new Date(now - 1000 * 60 * 120).toISOString(),
+      },
+      {
+        id: 'usage-seed-4',
+        user_id: 'admin-user-0001-uuid',
+        user_email: 'admin@propertyenhancer.ai',
+        image_id: 'img-seed-103',
+        provider: 'openai_direct',
+        model: 'gpt-4o-mini',
+        tokens_used: 210,
+        latency_ms: 650,
+        cost_estimate_usd: 0.005,
+        status: 'success',
+        error_code: null,
+        created_at: new Date(now - 1000 * 60 * 240).toISOString(),
+      },
+      {
+        id: 'usage-seed-5',
+        user_id: 'admin-ricky-main-uuid',
+        user_email: 'rickyrizkymnf123@gmail.com',
+        image_id: 'img-seed-104',
+        provider: 'kobil_llm',
+        model: 'gemini-2.5-flash-image-preview',
+        tokens_used: 160,
+        latency_ms: 980,
+        cost_estimate_usd: 0.004,
+        status: 'success',
+        error_code: null,
+        created_at: new Date(now - 1000 * 60 * 360).toISOString(),
+      },
+    ];
+
+    for (const item of initialLogs) {
+      this.api_usage_logs.set(item.id, item as any);
+    }
   }
 }
 
@@ -1020,6 +1099,39 @@ export class MockFunctionsClient {
 
   private async handleListModels(body: any, headers: Record<string, string>): Promise<{ data: any; error: any }> {
     const purpose = body.purpose || 'chat';
+    const baseUrl = (body.base_url || 'https://api.koboiillm.com/v1').trim().replace(/\/$/, '');
+    const apiKey = body.api_key || 'sk-koboi-live-99887766554433221100';
+
+    try {
+      const res = await fetch(`${baseUrl}/models`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (res.ok) {
+        const json = await res.json();
+        let modelIds: string[] = (json.data || json.models || [])
+          .map((m: any) => (typeof m === 'string' ? m : m.id || m.name))
+          .filter(Boolean);
+
+        if (purpose === 'image_generation' && modelIds.length > 0) {
+          const imageKeywords = ['image', 'imagen', 'dall', 'flux', 'sd', 'vision', 'edit', 'bfl', 'stability', 'midjourney'];
+          const filtered = modelIds.filter(id => imageKeywords.some(kw => id.toLowerCase().includes(kw)));
+          if (filtered.length > 0) {
+            modelIds = filtered;
+          }
+        }
+
+        if (modelIds.length > 0) {
+          return { data: { success: true, models: modelIds, source: baseUrl }, error: null };
+        }
+      }
+    } catch (_) {}
+
+    // Fallback models if endpoint unreachable or in test environment
     const models = purpose === 'image_generation'
       ? ['gemini-2.5-flash-image', 'gemini-2.5-flash-image-preview', 'gpt-image-1', 'imagen-3', 'kobil-image-v1']
       : ['gemini-2.5-flash', 'gemini-2.0-flash', 'gpt-4o-mini', 'gpt-4o', 'claude-3-5-sonnet', 'deepseek-chat'];
@@ -1175,19 +1287,25 @@ export class MockFunctionsClient {
 
     realtimeMultiplexer.emit('images', 'UPDATE', { ...newImage });
 
-    // Log success usage
+    // Log success usage with full schema details for AdminUsagePage
     const usageId = `usage-${Date.now()}`;
-    mockDb.api_usage_logs.set(usageId, {
+    const userEmail = mockDb.profiles.get(userId)?.email || mockDb.users.get(userId)?.email || 'user@propertyenhancer.ai';
+    const usageLogRecord = {
       id: usageId,
       user_id: userId || null,
+      user_email: userEmail,
       image_id: imageId,
       provider: providerName,
       model: modelName,
-      duration_ms: 850,
+      tokens_used: 150,
+      latency_ms: 850,
+      cost_estimate_usd: 0.003,
       status: 'success',
-      error_details: null,
+      error_code: null,
       created_at: new Date().toISOString(),
-    });
+    };
+    mockDb.api_usage_logs.set(usageId, usageLogRecord as any);
+    realtimeMultiplexer.emit('api_usage_logs', 'INSERT', usageLogRecord);
 
     return {
       data: {

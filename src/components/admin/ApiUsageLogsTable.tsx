@@ -76,6 +76,9 @@ export const ApiUsageLogsTable: React.FC<ApiUsageLogsTableProps> = ({ logs, isLo
             className="rounded-xl border border-white/10 bg-slate-900/80 px-3 py-2 text-sm text-slate-200 backdrop-blur-xl focus:border-purple-500/50 focus:outline-none"
           >
             <option value="all">Semua Provider</option>
+            <option value="kobil_llm">Kobil LLM Proxy</option>
+            <option value="gemini_direct">Gemini Direct</option>
+            <option value="openai_direct">OpenAI Direct</option>
             <option value="lovable">Lovable AI Gateway</option>
             <option value="openai">OpenAI</option>
             <option value="gemini">Google Gemini</option>
