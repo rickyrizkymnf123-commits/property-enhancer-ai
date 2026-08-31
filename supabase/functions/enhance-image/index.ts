@@ -157,20 +157,70 @@ export async function handleEnhanceImage(req: Request): Promise<Response> {
     const json = await response.json();
 
     // 4. Cari gambar hasil di beberapa kemungkinan lokasi field
-    const imageResult =
+    let imageResult =
       json?.choices?.[0]?.message?.images?.[0]?.image_url?.url ||
       json?.choices?.[0]?.message?.images?.[0]?.b64_json ||
+      json?.choices?.[0]?.message?.images?.[0]?.url ||
+      json?.choices?.[0]?.message?.images?.[0] ||
       json?.data?.[0]?.b64_json ||
       json?.data?.[0]?.url ||
       null;
+
+    // Check message.content for markdown image ![image](data:...) or Data URL string
+    if (!imageResult && json?.choices?.[0]?.message?.content) {
+      const contentStr = String(json.choices[0].message.content).trim();
+      const mdMatch = contentStr.match(/!\[.*?\]\((data:image\/[^)]+|https?:\/\/[^)]+)\)/);
+      if (mdMatch && mdMatch[1]) {
+        imageResult = mdMatch[1];
+      } else if (contentStr.startsWith("data:image/") || contentStr.startsWith("http://") || contentStr.startsWith("https://")) {
+        imageResult = contentStr;
+      } else if (contentStr.length > 500 && /^[A-Za-z0-9+/=]+$/.test(contentStr.substring(0, 100).replace(/\s/g, ""))) {
+        imageResult = `data:image/jpeg;base64,${contentStr}`;
+      }
+    }
+
+    // 5. Fallback Strategy B: Panggil /images/generations jika /chat/completions tidak mengembalikan array gambar
+    if (!imageResult) {
+      const genEndpoint = `${baseUrl}/images/generations`;
+      try {
+        const genRes = await fetch(genEndpoint, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${apiKey}`,
+          },
+          body: JSON.stringify({
+            model: config.model_name || "gemini-2.5-flash-image",
+            prompt: `Edit property photo: ${prompt}. Photo base64 data: ${formattedImageBase64.substring(0, 300)}`,
+            n: 1,
+            size: "1024x1024",
+            response_format: "b64_json",
+          }),
+        });
+        if (genRes.ok) {
+          const genJson = await genRes.json();
+          imageResult =
+            genJson?.data?.[0]?.b64_json ||
+            genJson?.data?.[0]?.url ||
+            genJson?.images?.[0]?.url ||
+            genJson?.images?.[0] ||
+            null;
+        }
+      } catch (genErr) {
+        console.warn("Fallback /images/generations failed:", genErr);
+      }
+    }
 
     if (!imageResult) {
       throw new Error(`Response Kobil LLM tidak mengandung gambar. Struktur response: ${JSON.stringify(json).substring(0, 800)}`);
     }
 
     let finalEnhancedUrl = imageResult;
-    if (!finalEnhancedUrl.startsWith("data:") && !finalEnhancedUrl.startsWith("http")) {
-      finalEnhancedUrl = `data:image/jpeg;base64,${imageResult}`;
+    if (typeof finalEnhancedUrl === 'object' && finalEnhancedUrl?.url) {
+      finalEnhancedUrl = finalEnhancedUrl.url;
+    }
+    if (typeof finalEnhancedUrl === 'string' && !finalEnhancedUrl.startsWith("data:") && !finalEnhancedUrl.startsWith("http")) {
+      finalEnhancedUrl = `data:image/jpeg;base64,${finalEnhancedUrl}`;
     }
 
     return new Response(

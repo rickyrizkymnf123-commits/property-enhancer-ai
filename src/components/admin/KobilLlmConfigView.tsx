@@ -292,9 +292,15 @@ export const KobilLlmConfigView: React.FC = () => {
               }
             }
             if (parsed.imageConfig) {
-              if (parsed.imageConfig.providerName) setImageProvider(parsed.imageConfig.providerName);
-              if (parsed.imageConfig.baseUrl) setImageBaseUrl(normalizeUrl(parsed.imageConfig.baseUrl));
-              if (parsed.imageConfig.modelName) setImageModel(cleanModelName(parsed.imageConfig.modelName));
+              const prov = parsed.imageConfig.providerName === 'lovable' ? 'kobil_llm' : parsed.imageConfig.providerName;
+              const url = parsed.imageConfig.baseUrl?.includes('lovable.ai') ? 'https://api.koboillm.com/v1' : normalizeUrl(parsed.imageConfig.baseUrl);
+              const model = parsed.imageConfig.modelName?.includes('google/') || parsed.imageConfig.modelName === 'gemini-2.5-flash'
+                ? 'gemini-2.5-flash-image'
+                : cleanModelName(parsed.imageConfig.modelName);
+
+              if (prov) setImageProvider(prov);
+              if (url) setImageBaseUrl(url);
+              if (model) setImageModel(model);
               if (parsed.imageConfig.rawApiKey) {
                 setRawImageApiKey(parsed.imageConfig.rawApiKey);
                 setImageApiKeyInput(parsed.imageConfig.rawApiKey);
