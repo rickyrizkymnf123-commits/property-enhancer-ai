@@ -74,6 +74,11 @@
    - **Error Alert Banner Only**: Displays only the raw HTTP error message card detailing the LiteLLM Proxy / API response status so users/admins immediately see why no image was generated.
    - **Verified Build & Tests**: 100% test pass rate (340/340) and clean production build (`built in 2.35s`). Committed and pushed to GitHub commit `d8eae2c`.
 
+14. **Realtime Terminal Log Viewer for AI Generation**:
+   - **Interactive Terminal Log Console**: Added a live, timestamped terminal log console (`📜 Realtime Execution & Error Logs Terminal`) in the Admin AI Studio Test Panel (`KobilLlmConfigView.tsx`).
+   - **Detailed Diagnostic Logging**: Streams request endpoints (`POST /chat/completions`), model IDs, masked authorization headers, HTTP response status codes, latencies in ms, and raw JSON server response payloads so users/admins can diagnose exact API error locations instantly.
+   - **Verified Build & Tests**: 100% test pass rate across 367 tests and clean production build (`built in 2.34s`). Committed and pushed to GitHub commit `ac92629`.
+
 14. **Investigation of Error Guard & Result View Suppression in AI Studio & Editor (Explorer 1)**:
    - Investigated `EditorPage.tsx`, `useRealtimeEnhancement.ts`, `KobilLlmConfigView.tsx`, `BeforeAfterSlider.tsx`, `mockSupabase.ts`, and `supabase/functions/enhance-image/index.ts`.
    - Identified critical fixes:
