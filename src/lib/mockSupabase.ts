@@ -1092,14 +1092,90 @@ export class MockFunctionsClient {
       return this.handleAdminUsers(body, headers);
     } else if (functionName === 'list-ai-models') {
       return this.handleListModels(body, headers);
+    } else if (functionName === 'ai-chat') {
+      return this.handleAiChat(body, headers);
     }
 
     return { data: null, error: { message: `Function ${functionName} not found`, status: 404 } };
   }
 
+  private async handleAiChat(body: any, headers: Record<string, string>): Promise<{ data: any; error: any }> {
+    const startTime = Date.now();
+    let baseUrl = (body.base_url || 'https://api.koboillm.com/v1')
+      .trim()
+      .replace('koboiillm.com', 'koboillm.com')
+      .replace(/\/$/, '');
+    const apiKey = body.api_key || 'sk-koboi-live-99887766554433221100';
+    const model = body.model || 'gemini-2.5-flash';
+    const messages = body.messages || [{ role: 'user', content: 'Halo' }];
+
+    try {
+      const res = await fetch(`${baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model,
+          messages,
+          temperature: 0.7,
+        }),
+      });
+
+      const latencyMs = Date.now() - startTime;
+
+      if (!res.ok) {
+        const errText = await res.text();
+        let parsedErr = errText;
+        try {
+          const errJson = JSON.parse(errText);
+          parsedErr = errJson.error?.message || errJson.message || errText;
+        } catch (_) {}
+
+        return {
+          data: {
+            success: false,
+            error: `Koneksi API (${baseUrl}) HTTP ${res.status}: ${parsedErr}`,
+            status: res.status,
+            latencyMs,
+          },
+          error: null,
+        };
+      }
+
+      const json = await res.json();
+      const replyText = json.choices?.[0]?.message?.content || json.message || JSON.stringify(json);
+
+      return {
+        data: {
+          success: true,
+          reply: replyText,
+          usage: json.usage || null,
+          latencyMs,
+          modelUsed: model,
+        },
+        error: null,
+      };
+    } catch (err: any) {
+      const latencyMs = Date.now() - startTime;
+      return {
+        data: {
+          success: false,
+          error: `Gagal menghubungkan ke ${baseUrl}/chat/completions: ${err.message || 'Network error'}`,
+          latencyMs,
+        },
+        error: null,
+      };
+    }
+  }
+
   private async handleListModels(body: any, headers: Record<string, string>): Promise<{ data: any; error: any }> {
     const purpose = body.purpose || 'chat';
-    const baseUrl = (body.base_url || 'https://api.koboiillm.com/v1').trim().replace(/\/$/, '');
+    const baseUrl = (body.base_url || 'https://api.koboillm.com/v1')
+      .trim()
+      .replace('koboiillm.com', 'koboillm.com')
+      .replace(/\/$/, '');
     const apiKey = body.api_key || 'sk-koboi-live-99887766554433221100';
 
     try {
