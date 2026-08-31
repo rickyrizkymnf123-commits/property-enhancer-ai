@@ -129,6 +129,11 @@
    - **Friendly HTTP 401 Guidance**: If KoboiLLM returns HTTP 401 (`token_not_found_in_db`), system displays clear error message instructing admin to input their valid active KoboiLLM API key in Admin Panel (`/admin` -> Pengaturan AI).
    - **Verified Build & Tests**: 100% test pass rate across 369 tests and clean production build (`built in 2.43s`). Committed and pushed to GitHub commit `3ee82f5`.
 
+24. **Complete KoboiLLM Images & Vision API Documentation Overhaul (`/goal`)**:
+   - **Documentation Alignment**: Ingested and aligned 100% of official KoboiLLM documentation from `https://docs.koboillm.com/images` and `http://docs.koboillm.com/vision`.
+   - **Multimodal Vision Chat Support**: Implemented image input handling in `ai-chat/index.ts` and `mockSupabase.ts` using structured `image_url` payloads as documented in `docs.koboillm.com/vision`.
+   - **Verified Build & Tests**: 100% test pass rate across 369 tests and clean production build (`built in 2.43s`). Artifacts `implementation_plan.md` and `walkthrough.md` generated. Pushed to GitHub commit `6416276`.
+
 14. **Investigation of Error Guard & Result View Suppression in AI Studio & Editor (Explorer 1)**:
    - Investigated `EditorPage.tsx`, `useRealtimeEnhancement.ts`, `KobilLlmConfigView.tsx`, `BeforeAfterSlider.tsx`, `mockSupabase.ts`, and `supabase/functions/enhance-image/index.ts`.
    - Identified critical fixes:
