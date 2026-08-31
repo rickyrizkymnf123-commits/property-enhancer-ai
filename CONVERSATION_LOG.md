@@ -42,3 +42,8 @@
    - **Eliminated Default Typo Seed**: Fixed `DEFAULT_AI_CONFIG` and `mockDb.seedDefaults()` in `src/lib/mockSupabase.ts` to permanently default to `https://api.koboillm.com/v1` (with 1 'i').
    - **Auto-Normalizing Load & Save**: Added `normalizeUrl` logic in `loadConfig` and `handleSaveConfig` so any old cached state with `koboiillm.com` (2 'i's) is automatically normalized to `https://api.koboillm.com/v1`.
    - **Verified Build & Tests**: 100% test pass rate (340/340) and clean production build (`built in 2.32s`). Committed and pushed to GitHub commit `1798c91`.
+
+8. **API Key Input Field & Autofill Prevention Fix**:
+   - **Removed `onFocus` Input Clearing**: Removed the event handler that cleared the API key input to empty string on focus, ensuring the saved masked key (`••••••••••••••••`) remains pre-filled and visible to the user at all times.
+   - **Disabled Password Manager Autofill Popup**: Added `autoComplete="new-password"` and `data-lpignore="true"` to prevent Chrome from intercepting API key fields as user login passwords (`rickyrizkymnf123@gmail.com`).
+   - **Verified Build & Tests**: 100% test pass rate (340/340) and clean production build (`built in 2.36s`). Committed and pushed to GitHub commit `65ab921`.
