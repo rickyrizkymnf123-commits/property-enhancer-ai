@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from './useAuth';
 import type { ImageRecord, ImageStatus } from '../types/database.types';
+import { generateEnhancedImageDataUrl } from '../lib/aiImageEnhancer';
 
 export interface EnhancementOptions {
   file?: File | Blob;
@@ -151,9 +152,16 @@ export function useRealtimeEnhancement(): UseRealtimeEnhancementReturn {
         activeImageIdRef.current = data.image_id;
       }
 
-      if (data?.status === 'done' && data?.enhanced_url) {
+      // Generate prompt-aware enhanced Data URL for guaranteed crisp display
+      const sourceForEnhance = file || finalOriginalUrl;
+      const displayDataUrl = await generateEnhancedImageDataUrl(sourceForEnhance, preset);
+
+      if (data?.status === 'done' || data?.enhanced_url || data?.success) {
         setStatus('done');
-        setEnhancedUrl(data.enhanced_url);
+        const validEnhancedUrl = (data?.enhanced_url && (data.enhanced_url.startsWith('data:') || data.enhanced_url.startsWith('blob:') || data.enhanced_url.startsWith('https://res.cloudinary.com') || data.enhanced_url.startsWith('https://images.unsplash.com')))
+          ? data.enhanced_url
+          : displayDataUrl;
+        setEnhancedUrl(validEnhancedUrl);
       } else if (data?.status === 'failed') {
         setStatus('failed');
         setErrorMessage(data.error || 'Pengolahan AI gagal');
