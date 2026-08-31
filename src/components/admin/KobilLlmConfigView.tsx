@@ -233,16 +233,19 @@ export const KobilLlmConfigView: React.FC = () => {
         addLog('error', `AI Provider HTTP Error (${latencyMs}ms)`, errMsg);
         toast.error('Pengujian Gagal', errMsg);
       } else {
-        setImageTestError(null);
         const resultUrl = data?.enhanced_url || data?.enhancedUrl;
-        if (resultUrl) {
+        if (resultUrl && typeof resultUrl === 'string' && (resultUrl.startsWith('data:') || resultUrl.startsWith('http'))) {
+          setImageTestError(null);
           setTestEnhancedUrl(resultUrl);
+          addLog('success', `Pengujian Real AI Kobil LLM Sukses (${latencyMs}ms)`, `Hasil gambar AI valid diterima dari Kobil LLM.`);
+          toast.success('Pengujian AI Studio Sukses!', `Hasil Real AI Kobil LLM berhasil digenerate dalam ${latencyMs}ms.`);
         } else {
-          const displayDataUrl = await generateEnhancedImageDataUrl(testOriginalUrl, testPrompt);
-          setTestEnhancedUrl(displayDataUrl);
+          const missingImgMsg = `Server Kobil LLM mengembalikan HTTP 200 OK tetapi tidak menyertakan gambar Base64/URL di dalamnya. Pastikan model AI '${imageModel}' mendukung output image.`;
+          setImageTestError(missingImgMsg);
+          setTestEnhancedUrl(null);
+          addLog('error', `Kobil LLM Response Tanpa Gambar (${latencyMs}ms)`, missingImgMsg);
+          toast.error('Kobil LLM Tanpa Gambar', missingImgMsg);
         }
-        addLog('success', `Pengujian AI Sukses dalam ${latencyMs}ms`, `Enhanced URL: ${resultUrl ? 'Base64/URL Gambar Valid' : 'Generated'}`);
-        toast.success('Pengujian AI Studio Sukses!', `Hasil AI berhasil digenerate dalam ${latencyMs}ms.`);
       }
     } catch (err: any) {
       const latencyMs = Date.now() - startTime;

@@ -1496,9 +1496,7 @@ export class MockFunctionsClient {
           }
 
           if (!imageResult) {
-            // High-fidelity Client-Side Canvas AI Enhancement Fallback when upstream returns text-only JSON
-            const displayDataUrl = await generateEnhancedImageDataUrl(body.original_url || body.file_path || inputImageBase64, inputPrompt);
-            enhancedResultUrl = displayDataUrl;
+            rawApiError = `Response Kobil LLM tidak mengandung gambar. Struktur response: ${JSON.stringify(json).substring(0, 800)}`;
           } else {
             let finalUrl = typeof imageResult === 'object' && imageResult?.url ? imageResult.url : imageResult;
             enhancedResultUrl = typeof finalUrl === 'string' && (finalUrl.startsWith('data:') || finalUrl.startsWith('http'))
