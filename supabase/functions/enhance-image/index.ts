@@ -138,34 +138,78 @@ export async function handleEnhanceImage(req: Request): Promise<Response> {
 
     const fullPromptText = `Edit this exact photo. Keep the building structure and camera angle exactly the same. ${prompt}.${visualDirectives}`;
 
-    // 2. Panggil Kobil LLM (format OpenAI-compatible chat completions dengan image input)
-    const response = await fetch(endpoint, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: config.model_name,
-        messages: [
-          {
-            role: "user",
-            content: [
-              {
-                type: "text",
-                text: fullPromptText,
-              },
-              {
-                type: "image_url",
-                image_url: { url: formattedImageBase64 },
-              },
-            ],
-          },
-        ],
-      }),
-    });
+    let response: Response | null = null;
+    let editModel = config.model_name || "openai/gpt-image-1.5";
 
-    // 3. WAJIB: kalau HTTP status bukan 200, tampilkan body response ASLI
+    // 2. Strategi Utama KoboiLLM Docs §5.1: POST /images/edits via multipart/form-data
+    if (editModel.includes("gpt-image") || editModel.includes("openai/") || editModel === "openai/gpt-image-1.5") {
+      try {
+        const editsEndpoint = `${baseUrl}/images/edits`;
+        const formData = new FormData();
+        formData.append("model", editModel.startsWith("openai/") ? editModel : `openai/${editModel}`);
+        formData.append("prompt", fullPromptText);
+        formData.append("size", "1024x1024");
+        formData.append("quality", "high");
+
+        if (formattedImageBase64.startsWith("data:")) {
+          const parts = formattedImageBase64.split(",");
+          const mime = parts[0].match(/:(.*?);/)?.[1] || "image/jpeg";
+          const bstr = atob(parts[1]);
+          let n = bstr.length;
+          const u8arr = new Uint8Array(n);
+          while (n--) {
+            u8arr[n] = bstr.charCodeAt(n);
+          }
+          const imageBlob = new Blob([u8arr], { type: mime });
+          formData.append("image", imageBlob, "input_photo.jpg");
+        }
+
+        const editsRes = await fetch(editsEndpoint, {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${apiKey}`,
+          },
+          body: formData,
+        });
+
+        if (editsRes.ok) {
+          response = editsRes;
+        }
+      } catch (editsErr) {
+        console.warn("KoboiLLM /images/edits endpoint call failed, falling back:", editsErr);
+      }
+    }
+
+    // 3. Fallback Strategi B (KoboiLLM Docs §5.4): POST /chat/completions
+    if (!response) {
+      response = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model: config.model_name || "gemini-2.5-flash-image",
+          messages: [
+            {
+              role: "user",
+              content: [
+                {
+                  type: "text",
+                  text: fullPromptText,
+                },
+                {
+                  type: "image_url",
+                  image_url: { url: formattedImageBase64 },
+                },
+              ],
+            },
+          ],
+        }),
+      });
+    }
+
+    // 4. WAJIB: kalau HTTP status bukan 200, tampilkan body response ASLI
     if (!response.ok) {
       const errText = await response.text();
       throw new Error(`Kobil LLM HTTP ${response.status}: ${errText.substring(0, 500)}`);

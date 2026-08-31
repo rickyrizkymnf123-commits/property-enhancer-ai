@@ -68,11 +68,12 @@ export const DEFAULT_AI_CONFIG = {
     apiKey: 'sk-koboi-live-99887766554433221100',
     modelName: 'gemini-2.5-flash-image',
     availableModels: [
+      'openai/gpt-image-1.5',
       'gemini-2.5-flash-image',
+      'vertex_ai/imagen-4.0-fast-generate-001',
       'gemini-2.5-flash-image-preview',
       'gpt-image-1',
       'imagen-3',
-      'kobil-image-v1',
     ],
   },
 };
