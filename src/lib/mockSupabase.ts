@@ -345,6 +345,34 @@ export class MockDatabase {
       updated_at: new Date().toISOString(),
     });
 
+    // Hydrate saved user settings from localStorage if available
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        const savedConfig = localStorage.getItem('pea_ai_provider_config_v4');
+        if (savedConfig) {
+          const parsed = JSON.parse(savedConfig);
+          if (parsed.chatConfig) {
+            const chatProv = this.api_provider_settings.get('prov-setting-chat');
+            if (chatProv) {
+              if (parsed.chatConfig.providerName) (chatProv as any).provider_name = parsed.chatConfig.providerName;
+              if (parsed.chatConfig.baseUrl) (chatProv as any).base_url = parsed.chatConfig.baseUrl;
+              if (parsed.chatConfig.modelName) (chatProv as any).model_name = parsed.chatConfig.modelName;
+              if (parsed.chatConfig.rawApiKey) (chatProv as any).api_key_encrypted = parsed.chatConfig.rawApiKey;
+            }
+          }
+          if (parsed.imageConfig) {
+            const imgProv = this.api_provider_settings.get('prov-setting-image');
+            if (imgProv) {
+              if (parsed.imageConfig.providerName) (imgProv as any).provider_name = parsed.imageConfig.providerName;
+              if (parsed.imageConfig.baseUrl) (imgProv as any).base_url = parsed.imageConfig.baseUrl;
+              if (parsed.imageConfig.modelName) (imgProv as any).model_name = parsed.imageConfig.modelName;
+              if (parsed.imageConfig.rawApiKey) (imgProv as any).api_key_encrypted = parsed.imageConfig.rawApiKey;
+            }
+          }
+        }
+      }
+    } catch (_) {}
+
     // Seed Admin Branding Setting
     const brandId = 'setting-branding-1';
     this.admin_settings.set(brandId, {
