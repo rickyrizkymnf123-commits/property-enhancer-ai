@@ -127,6 +127,17 @@ export const EditorPage: React.FC = () => {
             </div>
           )}
 
+          {/* Raw Error Alert Banner */}
+          {errorMessage && (
+            <div className="p-4 rounded-2xl bg-red-950/60 border border-red-500/50 text-red-200 space-y-1 font-mono text-xs shadow-lg animate-in fade-in" data-testid="editor-error-banner">
+              <div className="flex items-center gap-2 font-bold text-red-400">
+                <AlertTriangle className="w-4 h-4 text-red-400" />
+                <span>Error AI Provider Response (Raw Error):</span>
+              </div>
+              <p className="whitespace-pre-wrap opacity-90 break-words">{errorMessage}</p>
+            </div>
+          )}
+
           {/* Result View or Studio Workspace */}
           {isDone ? (
             /* Enhancement Done Result Comparison View */

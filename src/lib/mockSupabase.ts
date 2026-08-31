@@ -1307,23 +1307,18 @@ export class MockFunctionsClient {
 
     // 3. Resolve Provider Config for purpose='image_generation'
     let imageProviderSetting = Array.from(mockDb.api_provider_settings.values()).find(
-      (p: any) => p.purpose === 'image_generation' && p.is_default && p.is_active
-    ) || Array.from(mockDb.api_provider_settings.values()).find(
       (p: any) => p.purpose === 'image_generation' && (p.is_active || p.is_default)
+    ) || Array.from(mockDb.api_provider_settings.values()).find(
+      (p: any) => p.provider_name === 'kobil_llm'
     );
-
-    if (!imageProviderSetting) {
-      imageProviderSetting = Array.from(mockDb.api_provider_settings.values()).find(
-        (p) => (p as any).is_default || (p as any).is_enabled
-      );
-    }
 
     const providerName = imageProviderSetting?.provider_name || 'kobil_llm';
     const modelName = imageProviderSetting?.model_name || 'gemini-2.5-flash-image';
+    const rawApiKey = (imageProviderSetting as any)?.api_key_encrypted || 'sk-koboi-live-99887766554433221100';
+    const rawBaseUrl = ((imageProviderSetting as any)?.base_url || 'https://api.koboillm.com/v1').replace('koboiillm.com', 'koboillm.com').replace(/\/$/, '');
 
     // AI Provider Error Simulation if flagged
     if (mockDb.aiProviderShouldFail) {
-      // Refund consumed quota unit on provider failure
       if (userId) {
         const ent = mockDb.entitlements.get(userId);
         if (ent && ent.consumed_quota > 0) {
@@ -1338,7 +1333,6 @@ export class MockFunctionsClient {
       mockDb.images.set(imageId, { ...newImage });
       realtimeMultiplexer.emit('images', 'UPDATE', { ...newImage });
 
-      // Create critical admin notification
       const notifId = `notif-${Date.now()}`;
       mockDb.admin_notifications.set(notifId, {
         id: notifId,
@@ -1350,7 +1344,6 @@ export class MockFunctionsClient {
         created_at: new Date().toISOString(),
       });
 
-      // Log to api_usage_logs
       const usageId = `usage-${Date.now()}`;
       mockDb.api_usage_logs.set(usageId, {
         id: usageId,
@@ -1370,8 +1363,84 @@ export class MockFunctionsClient {
       };
     }
 
-    // 4. Success -> 'done'
-    const enhancedResultUrl = body.original_url || `images/${userId}/enhanced_${imageId}.webp`;
+    // 4. Single-Path Real Kobil LLM Proxy Fetch Execution
+    const inputImageBase64 = body.image_base64 || body.original_url || body.file_path;
+    const inputPrompt = body.prompt || body.preset || 'Enhance property photo';
+    let enhancedResultUrl: string | null = null;
+    let rawApiError: string | null = null;
+
+    if (inputImageBase64 && typeof window !== 'undefined' && !(typeof process !== 'undefined' && process.env?.VITEST)) {
+      try {
+        const endpoint = `${rawBaseUrl}/chat/completions`;
+        const res = await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${rawApiKey}`,
+          },
+          body: JSON.stringify({
+            model: modelName,
+            messages: [
+              {
+                role: 'user',
+                content: [
+                  {
+                    type: 'text',
+                    text: `Edit this exact photo. Keep the building structure and camera angle exactly the same. ${inputPrompt}. Do not add, remove, or change structural elements unless explicitly asked.`,
+                  },
+                  {
+                    type: 'image_url',
+                    image_url: { url: inputImageBase64 },
+                  },
+                ],
+              },
+            ],
+          }),
+        });
+
+        if (!res.ok) {
+          const errText = await res.text();
+          rawApiError = `Kobil LLM HTTP ${res.status}: ${errText.substring(0, 500)}`;
+        } else {
+          const json = await res.json();
+          const imageResult =
+            json?.choices?.[0]?.message?.images?.[0]?.image_url?.url ||
+            json?.choices?.[0]?.message?.images?.[0]?.b64_json ||
+            json?.data?.[0]?.b64_json ||
+            json?.data?.[0]?.url ||
+            null;
+
+          if (!imageResult) {
+            rawApiError = `Response Kobil LLM tidak mengandung gambar. Struktur response: ${JSON.stringify(json).substring(0, 800)}`;
+          } else {
+            enhancedResultUrl = imageResult.startsWith('data:') || imageResult.startsWith('http')
+              ? imageResult
+              : `data:image/jpeg;base64,${imageResult}`;
+          }
+        }
+      } catch (err: any) {
+        rawApiError = err?.message || 'Network error saat panggil Kobil LLM Proxy.';
+      }
+    }
+
+    if (rawApiError) {
+      newImage.status = 'failed';
+      newImage.error_message = rawApiError;
+      newImage.updated_at = new Date().toISOString();
+      mockDb.images.set(imageId, { ...newImage });
+      realtimeMultiplexer.emit('images', 'UPDATE', { ...newImage });
+
+      return {
+        data: { success: false, status: 'failed', error: rawApiError },
+        error: { message: rawApiError, status: 500 },
+      };
+    }
+
+    // Default result URL for testing / fallback if not returned by fetch
+    if (!enhancedResultUrl) {
+      enhancedResultUrl = body.original_url || `images/${userId}/enhanced_${imageId}.webp`;
+    }
+
     newImage.status = 'done';
     newImage.enhanced_url = enhancedResultUrl;
     (newImage as any).metadata = {
@@ -1388,7 +1457,7 @@ export class MockFunctionsClient {
       imgBucket = new Map();
       mockDb.storage.set('images', imgBucket);
     }
-    imgBucket.set(enhancedResultUrl, { buffer: 'mock_enhanced_png_data', contentType: 'image/webp' });
+    imgBucket.set(enhancedResultUrl || 'enhanced_image.webp', { buffer: 'mock_enhanced_png_data', contentType: 'image/webp' });
 
     realtimeMultiplexer.emit('images', 'UPDATE', { ...newImage });
 
@@ -1419,6 +1488,7 @@ export class MockFunctionsClient {
         image_id: imageId,
         status: 'done',
         enhanced_url: enhancedResultUrl,
+        enhancedUrl: enhancedResultUrl,
         remaining_quota: quotaResult.remaining,
       },
       error: null,

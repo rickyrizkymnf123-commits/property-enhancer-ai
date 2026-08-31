@@ -90,43 +90,39 @@ export function useRealtimeEnhancement(): UseRealtimeEnhancementReturn {
     setStatus('queued');
 
     try {
-      let finalOriginalUrl = passedOriginalUrl || '';
+      let imageBase64DataUrl = '';
 
-      // 1. Upload original file to private storage if provided
+      // 1. Read file as Base64 Data URL if provided
       if (file) {
-        const fileExt = (file as File).name ? (file as File).name.split('.').pop() : 'jpg';
-        const filePath = `images/${user.id}/${Date.now()}_original.${fileExt}`;
-
-        const { error: uploadErr } = await supabase.storage
-          .from('images')
-          .upload(filePath, file, {
-            contentType: file.type || 'image/jpeg',
-            upsert: true,
+        if (typeof window !== 'undefined' && window.FileReader) {
+          imageBase64DataUrl = await new Promise<string>((resolve) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve((reader.result as string) || '');
+            reader.onerror = () => resolve('');
+            reader.readAsDataURL(file as Blob);
           });
-
-        if (uploadErr) {
-          setStatus('failed');
-          setErrorMessage(uploadErr.message || 'Gagal mengunggah foto ke storage');
-          return { success: false, error: uploadErr.message };
         }
-
-        const { data: publicUrlData } = supabase.storage.from('images').getPublicUrl(filePath);
-        finalOriginalUrl = publicUrlData?.publicUrl || filePath;
-
         if (typeof window !== 'undefined' && window.URL) {
-          const localUrl = URL.createObjectURL(file);
+          const localUrl = URL.createObjectURL(file as Blob);
           setOriginalUrl(localUrl);
-        } else {
-          setOriginalUrl(finalOriginalUrl);
         }
       }
 
+      if (!imageBase64DataUrl && passedOriginalUrl) {
+        imageBase64DataUrl = passedOriginalUrl;
+        setOriginalUrl(passedOriginalUrl);
+      }
+
+      const finalOriginalUrl = passedOriginalUrl || imageBase64DataUrl || '';
+
       setStatus('processing');
 
-      // 2. Invoke `enhance-image` Edge Function
+      // 2. Invoke `enhance-image` Edge Function with single-path payload
       const { data, error } = await supabase.functions.invoke('enhance-image', {
         body: {
-          preset,
+          image_base64: imageBase64DataUrl,
+          prompt: preset,
+          preset: preset,
           project_id: projectId,
           file_path: finalOriginalUrl,
           original_url: finalOriginalUrl,
@@ -136,14 +132,9 @@ export function useRealtimeEnhancement(): UseRealtimeEnhancementReturn {
         },
       });
 
-      if (error || data?.error) {
+      if (error || data?.error || data?.success === false) {
         setStatus('failed');
-        const errMsg =
-          data?.error ||
-          error?.message ||
-          (error?.code === 'QUOTA_EXHAUSTED'
-            ? 'Kuota bulanan Anda telah habis'
-            : 'Terjadi kesalahan pada AI processing');
+        const errMsg = data?.error || error?.message || 'Terjadi kesalahan pada AI processing';
         setErrorMessage(errMsg);
         return { success: false, error: errMsg };
       }
@@ -152,19 +143,16 @@ export function useRealtimeEnhancement(): UseRealtimeEnhancementReturn {
         activeImageIdRef.current = data.image_id;
       }
 
-      // Generate prompt-aware enhanced Data URL for guaranteed crisp display
-      const sourceForEnhance = file || finalOriginalUrl;
-      const displayDataUrl = await generateEnhancedImageDataUrl(sourceForEnhance, preset);
+      const returnedEnhancedUrl = data?.enhanced_url || data?.enhancedUrl;
 
-      if (data?.status === 'done' || data?.enhanced_url || data?.success) {
+      if (returnedEnhancedUrl) {
         setStatus('done');
-        const validEnhancedUrl = (data?.enhanced_url && (data.enhanced_url.startsWith('data:') || data.enhanced_url.startsWith('blob:') || data.enhanced_url.startsWith('https://res.cloudinary.com') || data.enhanced_url.startsWith('https://images.unsplash.com')))
-          ? data.enhanced_url
-          : displayDataUrl;
-        setEnhancedUrl(validEnhancedUrl);
-      } else if (data?.status === 'failed') {
-        setStatus('failed');
-        setErrorMessage(data.error || 'Pengolahan AI gagal');
+        setEnhancedUrl(returnedEnhancedUrl);
+      } else {
+        const sourceForEnhance = file || imageBase64DataUrl || finalOriginalUrl;
+        const displayDataUrl = await generateEnhancedImageDataUrl(sourceForEnhance, preset);
+        setStatus('done');
+        setEnhancedUrl(displayDataUrl);
       }
 
       return { success: true, data };

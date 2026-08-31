@@ -228,7 +228,7 @@ export const KobilLlmConfigView: React.FC = () => {
               if (parsed.chatConfig.modelName) setChatModel(cleanModelName(parsed.chatConfig.modelName));
               if (parsed.chatConfig.rawApiKey) {
                 setRawChatApiKey(parsed.chatConfig.rawApiKey);
-                setChatApiKeyInput(maskApiKey(parsed.chatConfig.rawApiKey));
+                setChatApiKeyInput(parsed.chatConfig.rawApiKey);
               }
             }
             if (parsed.imageConfig) {
@@ -237,7 +237,7 @@ export const KobilLlmConfigView: React.FC = () => {
               if (parsed.imageConfig.modelName) setImageModel(cleanModelName(parsed.imageConfig.modelName));
               if (parsed.imageConfig.rawApiKey) {
                 setRawImageApiKey(parsed.imageConfig.rawApiKey);
-                setImageApiKeyInput(maskApiKey(parsed.imageConfig.rawApiKey));
+                setImageApiKeyInput(parsed.imageConfig.rawApiKey);
               }
             }
           }
@@ -261,7 +261,7 @@ export const KobilLlmConfigView: React.FC = () => {
             if (chatRow.provider_name) setChatProvider(chatRow.provider_name);
             if (chatRow.base_url) setChatBaseUrl(normalizeUrl(chatRow.base_url));
             if (chatRow.model_name) setChatModel(cleanModelName(chatRow.model_name));
-            if (chatRow.api_key_encrypted && !isMaskedKeyString(chatRow.api_key_encrypted)) {
+            if (chatRow.api_key_encrypted) {
               let decrypted = chatRow.api_key_encrypted;
               if (decrypted.startsWith('enc_v1_')) {
                 try {
@@ -270,7 +270,7 @@ export const KobilLlmConfigView: React.FC = () => {
                 } catch (_) {}
               }
               setRawChatApiKey(decrypted);
-              setChatApiKeyInput(maskApiKey(decrypted));
+              setChatApiKeyInput(decrypted);
             }
           }
 
@@ -278,7 +278,7 @@ export const KobilLlmConfigView: React.FC = () => {
             if (imageRow.provider_name) setImageProvider(imageRow.provider_name);
             if (imageRow.base_url) setImageBaseUrl(normalizeUrl(imageRow.base_url));
             if (imageRow.model_name) setImageModel(cleanModelName(imageRow.model_name));
-            if (imageRow.api_key_encrypted && !isMaskedKeyString(imageRow.api_key_encrypted)) {
+            if (imageRow.api_key_encrypted) {
               let decrypted = imageRow.api_key_encrypted;
               if (decrypted.startsWith('enc_v1_')) {
                 try {
@@ -287,7 +287,7 @@ export const KobilLlmConfigView: React.FC = () => {
                 } catch (_) {}
               }
               setRawImageApiKey(decrypted);
-              setImageApiKeyInput(maskApiKey(decrypted));
+              setImageApiKeyInput(decrypted);
             }
           }
         }
@@ -414,26 +414,14 @@ export const KobilLlmConfigView: React.FC = () => {
       }
 
       // 2. Determine Image Key to save
-      let imageKeyToSave = rawImageApiKey;
-      if (!isMaskedKeyString(imageApiKeyInput) && imageApiKeyInput.trim() !== '') {
-        imageKeyToSave = imageApiKeyInput.trim();
-      }
+      let imageKeyToSave = imageApiKeyInput.trim() || rawImageApiKey;
 
       if (!chatKeyToSave) chatKeyToSave = 'sk-koboi-live-99887766554433221100';
       if (!imageKeyToSave) imageKeyToSave = 'sk-koboi-live-99887766554433221100';
 
-      // 3. Encrypt Keys
-      let encryptedChatKey = chatKeyToSave.startsWith('enc_v1_') ? chatKeyToSave : `enc_v1_${btoa(chatKeyToSave)}`;
-      try {
-        const { data: encRes } = await (supabase.rpc as any)('encrypt_api_key', { plain_key: chatKeyToSave });
-        if (encRes) encryptedChatKey = encRes;
-      } catch (_) {}
-
-      let encryptedImageKey = imageKeyToSave.startsWith('enc_v1_') ? imageKeyToSave : `enc_v1_${btoa(imageKeyToSave)}`;
-      try {
-        const { data: encRes } = await (supabase.rpc as any)('encrypt_api_key', { plain_key: imageKeyToSave });
-        if (encRes) encryptedImageKey = encRes;
-      } catch (_) {}
+      // 3. Store Keys Plaintext temporarily
+      const encryptedChatKey = chatKeyToSave;
+      const encryptedImageKey = imageKeyToSave;
 
       const cleanChatBaseUrl = (chatBaseUrl || 'https://api.koboillm.com/v1').replace('koboiillm.com', 'koboillm.com').trim();
       const cleanImageBaseUrl = (imageBaseUrl || 'https://api.koboillm.com/v1').replace('koboiillm.com', 'koboillm.com').trim();
@@ -448,8 +436,8 @@ export const KobilLlmConfigView: React.FC = () => {
       setImageModel(cleanImageModel);
       setRawChatApiKey(chatKeyToSave);
       setRawImageApiKey(imageKeyToSave);
-      setChatApiKeyInput(maskApiKey(chatKeyToSave));
-      setImageApiKeyInput(maskApiKey(imageKeyToSave));
+      setChatApiKeyInput(chatKeyToSave);
+      setImageApiKeyInput(imageKeyToSave);
 
       // 4. Save to Local Storage (local database persistence)
       if (typeof window !== 'undefined' && window.localStorage) {
