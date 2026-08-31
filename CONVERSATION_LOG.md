@@ -47,3 +47,8 @@
    - **Removed `onFocus` Input Clearing**: Removed the event handler that cleared the API key input to empty string on focus, ensuring the saved masked key (`••••••••••••••••`) remains pre-filled and visible to the user at all times.
    - **Disabled Password Manager Autofill Popup**: Added `autoComplete="new-password"` and `data-lpignore="true"` to prevent Chrome from intercepting API key fields as user login passwords (`rickyrizkymnf123@gmail.com`).
    - **Verified Build & Tests**: 100% test pass rate (340/340) and clean production build (`built in 2.36s`). Committed and pushed to GitHub commit `65ab921`.
+
+9. **Model ID Sanitization & Raw Identical Persistence**:
+   - **Removed Extra Prefix Text**: Stripped `[Image Capable]` and emoji prefixes (`🖼️`, `🤖`) from option tags in `KobilLlmConfigView.tsx` select dropdowns.
+   - **Sanitized Saved Model Names**: Added `cleanModelName` sanitizer in `loadConfig` and `handleSaveConfig` to ensure saved model strings match exact model IDs (e.g. `gemini-2.5-flash-image`) without extra text.
+   - **Verified Build & Tests**: 100% test pass rate (340/340) and clean production build (`built in 2.33s`). Committed and pushed to GitHub commit `a165953`.
