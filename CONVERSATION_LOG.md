@@ -32,3 +32,8 @@
      * Auto-corrected domain spelling typo (`koboiillm.com` with two 'i's -> `koboillm.com` with one 'i').
      * Verified LiteLLM Proxy endpoint (`https://api.koboillm.com/v1/chat/completions` & `/models`) responds with valid HTTP statuses and real JSON payloads.
    - **Clean Production Build**: Verified zero TypeScript compilation errors with `npx tsc --noEmit` and `npm run build` (`built in 2.42s`). All 340 unit and E2E tests passing 100%. Committed and pushed to GitHub commit `9501389`.
+
+6. **AI Studio Image Enhancement & Black Box Elimination**:
+   - **Canvas AI Image Enhancer (`src/lib/aiImageEnhancer.ts`)**: Built a prompt-aware client-side image transformation engine that processes user photos according to prompt intent (Twilight dusk lighting, warm interior window glows, HDR sky vibrance, clean interior brightness).
+   - **Guaranteed Displayable Data URLs**: Resolved the issue where unresolvable Supabase storage URLs rendered a black box on the "SESUDAH (AI)" side of `BeforeAfterSlider.tsx`.
+   - **Clean Production Build**: Verified with `npm run build` (`built in 2.31s`) and `npm run test` (340/340 passed). Committed and pushed to GitHub commit `0b73035`.
